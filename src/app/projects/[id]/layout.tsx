@@ -1,28 +1,29 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import Providers from "@/components/Providers";
-import Navbar from "@/components/Navbar";
-import { auth } from "@/lib/auth";
+import { db } from "@/db";
+import { projects } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { notFound } from "next/navigation";
+import ProjectTabs from "@/components/ProjectTabs";
 
-export const metadata: Metadata = {
-  title: "Test Manager",
-  description: "Tu propio Test Manager: casos, ejecuciones, defectos y reportes.",
-};
-
-export default async function RootLayout({
-  children,
-}: {
+export default async function ProjectLayout(props: {
+  params: Promise<{ id: string }>;
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const { id } = await props.params;
+  const project = await db.query.projects.findFirst({ where: eq(projects.id, id) });
+  if (!project) notFound();
+
   return (
-    <html lang="es" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-slate-50">
-        <Providers>
-          {session?.user && <Navbar user={session.user} />}
-          <main className="flex-1">{children}</main>
-        </Providers>
-      </body>
-    </html>
+    <div>
+      <div className="bg-white border-b border-slate-100">
+        <div className="w-full px-4 sm:px-8 pt-6 pb-2">
+          <h1 className="text-xl font-semibold text-slate-900">{project.name}</h1>
+          {project.description && (
+            <p className="text-sm text-slate-500 mt-1">{project.description}</p>
+          )}
+        </div>
+      </div>
+      <ProjectTabs projectId={id} />
+      <div className="w-full px-4 sm:px-8 py-8">{props.children}</div>
+    </div>
   );
 }
