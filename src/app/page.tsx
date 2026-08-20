@@ -36,7 +36,7 @@ export default async function HomePage() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+    <div className="w-full px-4 sm:px-8 py-10">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Proyectos</h1>

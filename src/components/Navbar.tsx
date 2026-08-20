@@ -17,7 +17,7 @@ export default function Navbar({
 
   return (
     <header className="border-b border-teal-700 bg-teal-600">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+      <div className="w-full px-4 sm:px-8 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/" className="font-semibold text-white">
             🧪 Test Manager

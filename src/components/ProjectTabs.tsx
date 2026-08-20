@@ -17,7 +17,7 @@ export default function ProjectTabs({ projectId }: { projectId: string }) {
 
   return (
     <div className="border-b border-slate-200 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-8">
         <nav className="flex gap-1 overflow-x-auto">
           {tabs.map((t) => {
             const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);
