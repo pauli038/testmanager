@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 
 type Plan = { id: string; name: string; description: string | null; createdAt: string };
 
@@ -15,6 +16,7 @@ export default function PlansList({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [open, setOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -33,9 +35,9 @@ export default function PlansList({
   }
 
   async function remove(id: string) {
-    if (!confirm("¿Eliminar este plan?")) return;
     await fetch(`/api/plans/${id}`, { method: "DELETE" });
     setPlans((p) => p.filter((x) => x.id !== id));
+    setPendingDelete(null);
   }
 
   return (
@@ -63,7 +65,7 @@ export default function PlansList({
               )}
             </div>
             <button
-              onClick={() => remove(p.id)}
+              onClick={() => setPendingDelete(p.id)}
               className="text-xs text-red-600 hover:underline"
             >
               Eliminar
@@ -116,6 +118,13 @@ export default function PlansList({
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={pendingDelete !== null}
+        message="¿Eliminar este plan?"
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

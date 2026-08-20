@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 
 type Defect = {
   id: string;
@@ -42,6 +43,7 @@ export default function DefectsList({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -69,9 +71,9 @@ export default function DefectsList({
   }
 
   async function remove(id: string) {
-    if (!confirm("¿Eliminar este defecto?")) return;
     await fetch(`/api/defects/${id}`, { method: "DELETE" });
     setDefects((d) => d.filter((x) => x.id !== id));
+    setPendingDelete(null);
   }
 
   return (
@@ -112,7 +114,7 @@ export default function DefectsList({
                   <option value="closed">Cerrado</option>
                 </select>
                 <button
-                  onClick={() => remove(d.id)}
+                  onClick={() => setPendingDelete(d.id)}
                   className="text-xs text-slate-400 hover:text-red-600"
                 >
                   ✕
@@ -180,6 +182,13 @@ export default function DefectsList({
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={pendingDelete !== null}
+        message="¿Eliminar este defecto?"
+        onConfirm={() => pendingDelete && remove(pendingDelete)}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

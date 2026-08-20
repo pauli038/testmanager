@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ConfirmModal from "./ConfirmModal";
 
 type ApiKey = { id: string; name: string; key: string; createdAt: string };
 
@@ -14,6 +15,7 @@ export default function ApiKeysManager({
   const [keys, setKeys] = useState(initialKeys);
   const [name, setName] = useState("Playwright CI");
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   async function createKey(e: React.FormEvent) {
     e.preventDefault();
@@ -30,9 +32,9 @@ export default function ApiKeysManager({
   }
 
   async function removeKey(id: string) {
-    if (!confirm("¿Eliminar esta API key? Cualquier integración que la use dejará de funcionar.")) return;
     await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
     setKeys((k) => k.filter((x) => x.id !== id));
+    setPendingDelete(null);
   }
 
   function toggleReveal(id: string) {
@@ -87,7 +89,7 @@ export default function ApiKeysManager({
                 {revealed.has(k.id) ? "Ocultar" : "Mostrar"}
               </button>
               <button
-                onClick={() => removeKey(k.id)}
+                onClick={() => setPendingDelete(k.id)}
                 className="text-red-600 hover:underline"
               >
                 Eliminar
@@ -101,6 +103,13 @@ export default function ApiKeysManager({
           </p>
         )}
       </div>
+
+      <ConfirmModal
+        open={pendingDelete !== null}
+        message="¿Eliminar esta API key? Cualquier integración que la use dejará de funcionar."
+        onConfirm={() => pendingDelete && removeKey(pendingDelete)}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import ConfirmModal from "./ConfirmModal";
 
 type Suite = { id: string; name: string; description: string | null };
 type Step = { step: string; expected: string };
@@ -43,6 +44,10 @@ export default function SuitesExplorer({
   const [newSuiteName, setNewSuiteName] = useState("");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [editingCase, setEditingCase] = useState<TestCase | null>(null);
+  const [pendingDeleteSuite, setPendingDeleteSuite] = useState<string | null>(null);
+  const [pendingDeleteCase, setPendingDeleteCase] = useState<{ caseId: string; suiteId: string } | null>(
+    null
+  );
 
   async function createSuite(e: React.FormEvent) {
     e.preventDefault();
@@ -62,10 +67,10 @@ export default function SuitesExplorer({
   }
 
   async function deleteSuite(suiteId: string) {
-    if (!confirm("¿Eliminar esta suite y todos sus casos?")) return;
     await fetch(`/api/suites/${suiteId}`, { method: "DELETE" });
     setSuites((s) => s.filter((x) => x.id !== suiteId));
     if (selectedSuite === suiteId) setSelectedSuite(null);
+    setPendingDeleteSuite(null);
     router.refresh();
   }
 
@@ -80,12 +85,12 @@ export default function SuitesExplorer({
   }
 
   async function deleteCase(caseId: string, suiteId: string) {
-    if (!confirm("¿Eliminar este caso de prueba?")) return;
     await fetch(`/api/cases/${caseId}`, { method: "DELETE" });
     setCasesBySuite((c) => ({
       ...c,
       [suiteId]: c[suiteId].filter((x) => x.id !== caseId),
     }));
+    setPendingDeleteCase(null);
   }
 
   function onCaseSaved(suiteId: string, testCase: TestCase, isNew: boolean) {
@@ -138,7 +143,7 @@ export default function SuitesExplorer({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteSuite(s.id);
+                    setPendingDeleteSuite(s.id);
                   }}
                   className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 text-xs"
                 >
@@ -213,7 +218,7 @@ export default function SuitesExplorer({
                         Editar
                       </button>
                       <button
-                        onClick={() => deleteCase(c.id, c.suiteId)}
+                        onClick={() => setPendingDeleteCase({ caseId: c.id, suiteId: c.suiteId })}
                         className="text-red-600 hover:underline"
                       >
                         Eliminar
@@ -244,6 +249,22 @@ export default function SuitesExplorer({
           onSaved={onCaseSaved}
         />
       )}
+
+      <ConfirmModal
+        open={pendingDeleteSuite !== null}
+        message="¿Eliminar esta suite y todos sus casos?"
+        onConfirm={() => pendingDeleteSuite && deleteSuite(pendingDeleteSuite)}
+        onCancel={() => setPendingDeleteSuite(null)}
+      />
+
+      <ConfirmModal
+        open={pendingDeleteCase !== null}
+        message="¿Eliminar este caso de prueba?"
+        onConfirm={() =>
+          pendingDeleteCase && deleteCase(pendingDeleteCase.caseId, pendingDeleteCase.suiteId)
+        }
+        onCancel={() => setPendingDeleteCase(null)}
+      />
     </div>
   );
 }
