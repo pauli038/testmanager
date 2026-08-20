@@ -37,6 +37,7 @@ export default function RunsList({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sourceFilter, setSourceFilter] = useState<"all" | "manual" | "playwright">("all");
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/runs`)
@@ -77,10 +78,37 @@ export default function RunsList({
     }
   }
 
+  const filteredRuns = runs.filter((r) =>
+    sourceFilter === "all" ? true : r.source === sourceFilter
+  );
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-slate-700">Test Runs</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-medium text-slate-700">Test Runs</h3>
+          <div className="flex items-center rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+            {(
+              [
+                { key: "all", label: "Todos" },
+                { key: "manual", label: "🧍 Manual" },
+                { key: "playwright", label: "🤖 Automatizado" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setSourceFilter(opt.key)}
+                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                  sourceFilter === opt.key
+                    ? "bg-indigo-600 text-white"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           onClick={() => setOpen(true)}
           className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-indigo-700"
@@ -91,13 +119,15 @@ export default function RunsList({
 
       {loading ? (
         <p className="text-sm text-slate-400">Cargando...</p>
-      ) : runs.length === 0 ? (
+      ) : filteredRuns.length === 0 ? (
         <p className="text-sm text-slate-400 py-10 text-center border border-dashed border-slate-300 rounded-xl">
-          No hay runs todavía.
+          {runs.length === 0
+            ? "No hay runs todavía."
+            : "No hay runs que coincidan con este filtro."}
         </p>
       ) : (
         <div className="space-y-2">
-          {runs.map((r) => {
+          {filteredRuns.map((r) => {
             const pct = r.total > 0 ? Math.round(((r.stats.passed || 0) / r.total) * 100) : 0;
             return (
               <Link
