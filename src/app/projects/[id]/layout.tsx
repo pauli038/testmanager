@@ -26,4 +26,4 @@ export default async function ProjectLayout(props: {
       <div className="w-full px-4 sm:px-8 py-8">{props.children}</div>
     </div>
   );
-}
+}//layput projects
