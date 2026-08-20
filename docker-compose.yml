@@ -1,0 +1,27 @@
+services:
+  testmanager:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - AUTH_SECRET=change-me-to-a-long-random-string
+      - AUTH_TRUST_HOST=true
+      # Point this at any Postgres — Neon/Supabase (free, recommended) or the
+      # local "db" service below.
+      - DATABASE_URL=postgresql://testmanager:testmanager@db:5432/testmanager
+    depends_on:
+      - db
+
+  # Optional local Postgres for self-hosting without an external provider.
+  # Skip this service entirely if you're using a free Neon/Supabase database.
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=testmanager
+      - POSTGRES_PASSWORD=testmanager
+      - POSTGRES_DB=testmanager
+    volumes:
+      - testmanager-db:/var/lib/postgresql/data
+
+volumes:
+  testmanager-db:
