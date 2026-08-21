@@ -1,35 +1,90 @@
 import { db } from "@/db";
-import { apiKeys, users } from "@/db/schema";
-import { eq } from "drizzle-orm";
-import ApiKeysManager from "@/components/ApiKeysManager";
+import { testRuns, testRunCases, testCases, testSuites, defects } from "@/db/schema";
+import { eq, sql, inArray } from "drizzle-orm";
+import DashboardCharts from "@/components/DashboardCharts";
 
-export default async function SettingsPage(props: { params: Promise<{ id: string }> }) {
+export default async function ProjectDashboard(props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const keys = await db.query.apiKeys.findMany({ where: eq(apiKeys.projectId, id) });
-  const allUsers = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users);
+
+  const suites = await db.query.testSuites.findMany({ where: eq(testSuites.projectId, id) });
+  const suiteIds = suites.map((s) => s.id);
+  const caseCountRes = suiteIds.length
+    ? await db
+        .select({ count: sql<number>`count(*)` })
+        .from(testCases)
+        .where(inArray(testCases.suiteId, suiteIds))
+    : [{ count: 0 }];
+
+  const runs = await db.query.testRuns.findMany({
+    where: eq(testRuns.projectId, id),
+    orderBy: (r, { desc }) => [desc(r.createdAt)],
+    limit: 10,
+  });
+
+  const runTrend = await Promise.all(
+    runs
+      .slice()
+      .reverse()
+      .map(async (r) => {
+        const rows = await db
+          .select({ status: testRunCases.status, count: sql<number>`count(*)` })
+          .from(testRunCases)
+          .where(eq(testRunCases.runId, r.id))
+          .groupBy(testRunCases.status);
+        const stats: Record<string, number> = {
+          untested: 0,
+          passed: 0,
+          failed: 0,
+          blocked: 0,
+          skipped: 0,
+        };
+        for (const row of rows) stats[row.status] = row.count;
+        const total = Object.values(stats).reduce((a, b) => a + b, 0);
+        return {
+          name: r.name.length > 18 ? r.name.slice(0, 18) + "…" : r.name,
+          passRate: total > 0 ? Math.round((stats.passed / total) * 100) : 0,
+          ...stats,
+          total,
+        };
+      })
+  );
+
+  const overallRows = runs.length
+    ? await db
+        .select({ status: testRunCases.status, count: sql<number>`count(*)` })
+        .from(testRunCases)
+        .where(
+          inArray(
+            testRunCases.runId,
+            runs.map((r) => r.id)
+          )
+        )
+        .groupBy(testRunCases.status)
+    : [];
+  const overallStats: Record<string, number> = {
+    untested: 0,
+    passed: 0,
+    failed: 0,
+    blocked: 0,
+    skipped: 0,
+  };
+  for (const row of overallRows) overallStats[row.status] = row.count;
+
+  const defectRows = await db
+    .select({ status: defects.status, count: sql<number>`count(*)` })
+    .from(defects)
+    .where(eq(defects.projectId, id))
+    .groupBy(defects.status);
+  const defectStats: Record<string, number> = { open: 0, in_progress: 0, closed: 0 };
+  for (const row of defectRows) defectStats[row.status] = row.count;
 
   return (
-    <div className="space-y-10">
-      <ApiKeysManager projectId={id} initialKeys={keys} />
-
-      <div>
-        <h3 className="text-sm font-medium text-slate-700 mb-3">Usuarios del sistema</h3>
-        <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
-          {allUsers.map((u) => (
-            <div key={u.id} className="flex items-center justify-between p-3 text-sm">
-              <div>
-                <span className="text-slate-900 font-medium">{u.name}</span>{" "}
-                <span className="text-slate-400">{u.email}</span>
-              </div>
-              <span className="text-xs uppercase text-slate-500">{u.role}</span>
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-slate-400 mt-2">
-          Cualquier usuario registrado puede ver y trabajar en todos los proyectos por ahora
-          (modelo simple de equipo). Los roles admin/lead pueden gestionar proyectos y defectos.
-        </p>
-      </div>
-    </div>
+    <DashboardCharts
+      totalCases={caseCountRes[0]?.count ?? 0}
+      totalRuns={runs.length}
+      overallStats={overallStats}
+      runTrend={runTrend}
+      defectStats={defectStats}
+    />
   );
 }
