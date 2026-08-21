@@ -1,82 +1,33 @@
-"use client";
+import { db } from "@/db";
+import { apiKeys, users } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import ApiKeysManager from "@/components/ApiKeysManager";
 
-import { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-
-export default function LoginPage() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError("Correo o contraseña incorrectos");
-      return;
-    }
-    router.push(params.get("callbackUrl") || "/");
-    router.refresh();
-  }
+export default async function SettingsPage(props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
+  const keys = await db.query.apiKeys.findMany({ where: eq(apiKeys.projectId, id) });
+  const allUsers = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
-        <h1 className="text-xl font-semibold text-slate-900 mb-1">
-          Test Manager
-        </h1>
-        <p className="text-sm text-slate-500 mb-6">
-          Inicia sesión para continuar
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">Correo</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">
-              Contraseña
-            </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-teal-600 text-white text-sm font-medium py-2 hover:bg-teal-700 disabled:opacity-50"
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </button>
-        </form>
-        <p className="text-sm text-slate-500 mt-4">
-          ¿No tienes cuenta?{" "}
-          <Link href="/register" className="text-teal-600 hover:underline">
-            Regístrate
-          </Link>
+    <div className="space-y-10">
+      <ApiKeysManager projectId={id} initialKeys={keys} />
+
+      <div>
+        <h3 className="text-sm font-medium text-slate-700 mb-3">Usuarios del sistema</h3>
+        <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
+          {allUsers.map((u) => (
+            <div key={u.id} className="flex items-center justify-between p-3 text-sm">
+              <div>
+                <span className="text-slate-900 font-medium">{u.name}</span>{" "}
+                <span className="text-slate-400">{u.email}</span>
+              </div>
+              <span className="text-xs uppercase text-slate-500">{u.role}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400 mt-2">
+          Cualquier usuario registrado puede ver y trabajar en todos los proyectos por ahora
+          (modelo simple de equipo). Los roles admin/lead pueden gestionar proyectos y defectos.
         </p>
       </div>
     </div>
