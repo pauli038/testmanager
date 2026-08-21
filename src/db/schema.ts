@@ -234,7 +234,7 @@ export const defects = pgTable("defects", {
   createdAt: createdAt(),
 });
 
-export const defectsRelations = relations(defects, ({ one }) => ({
+export const defectsRelations = relations(defects, ({ one, many }) => ({
   project: one(projects, {
     fields: [defects.projectId],
     references: [projects.id],
@@ -243,16 +243,17 @@ export const defectsRelations = relations(defects, ({ one }) => ({
     fields: [defects.runCaseId],
     references: [testRunCases.id],
   }),
+  attachments: many(attachments),
 }));
 
 // ---------- Attachments (evidence/screenshots) ----------
 // Stored as base64 directly in the database (data column) so it works on
 // serverless hosts (Vercel) without needing a separate file-storage service.
+// Belongs to either a run case OR a defect (the other stays null).
 export const attachments = pgTable("attachments", {
   id: id(),
-  runCaseId: text("run_case_id")
-    .notNull()
-    .references(() => testRunCases.id, { onDelete: "cascade" }),
+  runCaseId: text("run_case_id").references(() => testRunCases.id, { onDelete: "cascade" }),
+  defectId: text("defect_id").references(() => defects.id, { onDelete: "cascade" }),
   filename: text("filename").notNull(),
   data: text("data").notNull(), // base64-encoded file content
   mimeType: text("mime_type").notNull().default("image/png"),
@@ -263,6 +264,10 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   runCase: one(testRunCases, {
     fields: [attachments.runCaseId],
     references: [testRunCases.id],
+  }),
+  defect: one(defects, {
+    fields: [attachments.defectId],
+    references: [defects.id],
   }),
 }));
 

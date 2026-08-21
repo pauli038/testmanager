@@ -10,6 +10,7 @@ type Defect = {
   severity: string;
   status: string;
   createdAt: string;
+  attachments: { id: string; filename: string; url: string }[];
 };
 
 const severityColors: Record<string, string> = {
@@ -76,6 +77,23 @@ export default function DefectsList({
     setPendingDelete(null);
   }
 
+  async function uploadEvidence(defectId: string, file: File) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/defects/${defectId}/attachments`, {
+      method: "POST",
+      body: fd,
+    });
+    if (res.ok) {
+      const attachment = await res.json();
+      setDefects((d) =>
+        d.map((x) =>
+          x.id === defectId ? { ...x, attachments: [...x.attachments, attachment] } : x
+        )
+      );
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -101,6 +119,32 @@ export default function DefectsList({
                   <span className={`text-xs rounded px-1.5 py-0.5 ${severityColors[d.severity]}`}>
                     {d.severity}
                   </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-2">
+                  {d.attachments.map((a) => (
+                    <a
+                      key={a.id}
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block w-12 h-12 rounded border border-slate-200 overflow-hidden"
+                    >
+                      <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
+                    </a>
+                  ))}
+                  <label className="text-xs text-teal-600 cursor-pointer hover:underline">
+                    📸 Subir evidencia
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadEvidence(d.id, file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
                 </div>
               </div>
               <div className="flex items-center gap-2">

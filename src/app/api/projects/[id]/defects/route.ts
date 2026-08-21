@@ -11,8 +11,17 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const all = await db.query.defects.findMany({
     where: eq(defects.projectId, id),
     orderBy: (d, { desc }) => [desc(d.createdAt)],
+    with: { attachments: true },
   });
-  return NextResponse.json(all);
+  const result = all.map((d) => ({
+    ...d,
+    attachments: d.attachments.map((a) => ({
+      id: a.id,
+      filename: a.filename,
+      url: `data:${a.mimeType};base64,${a.data}`,
+    })),
+  }));
+  return NextResponse.json(result);
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -34,5 +43,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     })
     .returning();
 
-  return NextResponse.json(defect, { status: 201 });
+  return NextResponse.json({ ...defect, attachments: [] }, { status: 201 });
 }
