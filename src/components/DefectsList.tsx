@@ -82,7 +82,7 @@ export default function DefectsList({
         <h3 className="text-sm font-medium text-slate-700">Defectos / Bugs</h3>
         <button
           onClick={() => setOpen(true)}
-          className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-indigo-700"
+          className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
         >
           + Nuevo defecto
         </button>
@@ -174,7 +174,7 @@ export default function DefectsList({
                 >
                   Cancelar
                 </button>
-                <button className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-4 py-2 hover:bg-indigo-700">
+                <button className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700">
                   Crear
                 </button>
               </div>

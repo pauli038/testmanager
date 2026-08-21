@@ -64,7 +64,7 @@ export default function ApiKeysManager({
           onChange={(e) => setName(e.target.value)}
           className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
         />
-        <button className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-3 py-2 hover:bg-indigo-700">
+        <button className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-2 hover:bg-teal-700">
           + Generar API key
         </button>
       </form>
@@ -84,7 +84,7 @@ export default function ApiKeysManager({
             <div className="flex gap-3 text-xs">
               <button
                 onClick={() => toggleReveal(k.id)}
-                className="text-indigo-600 hover:underline"
+                className="text-teal-600 hover:underline"
               >
                 {revealed.has(k.id) ? "Ocultar" : "Mostrar"}
               </button>

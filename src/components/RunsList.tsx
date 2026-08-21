@@ -100,7 +100,7 @@ export default function RunsList({
                 onClick={() => setSourceFilter(opt.key)}
                 className={`px-2.5 py-1 rounded-md font-medium transition ${
                   sourceFilter === opt.key
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-teal-600 text-white"
                     : "text-slate-500 hover:text-slate-900"
                 }`}
               >
@@ -111,7 +111,7 @@ export default function RunsList({
         </div>
         <button
           onClick={() => setOpen(true)}
-          className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-indigo-700"
+          className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
         >
           + Nuevo run
         </button>
@@ -133,7 +133,7 @@ export default function RunsList({
               <Link
                 key={r.id}
                 href={`/projects/${projectId}/runs/${r.id}`}
-                className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-indigo-300"
+                className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-teal-300"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -148,7 +148,7 @@ export default function RunsList({
                         className={`text-xs rounded px-1.5 py-0.5 ${
                           r.status === "completed"
                             ? "bg-slate-100 text-slate-600"
-                            : "bg-indigo-100 text-indigo-700"
+                            : "bg-teal-100 text-teal-700"
                         }`}
                       >
                         {r.status === "completed" ? "Completado" : "Activo"}
@@ -244,7 +244,7 @@ export default function RunsList({
                 </button>
                 <button
                   disabled={selected.size === 0}
-                  className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-4 py-2 hover:bg-indigo-700 disabled:opacity-50"
+                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
                 >
                   Crear run
                 </button>

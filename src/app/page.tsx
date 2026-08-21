@@ -59,7 +59,7 @@ export default async function HomePage() {
               <Link
                 key={p.id}
                 href={`/projects/${p.id}`}
-                className="block bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-indigo-300 transition"
+                className="block bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-teal-300 transition"
               >
                 <h2 className="font-medium text-slate-900">{p.name}</h2>
                 <p className="text-sm text-slate-500 mt-1 line-clamp-2">

@@ -1,90 +1,84 @@
-import { db } from "@/db";
-import { testRuns, testRunCases, testCases, testSuites, defects } from "@/db/schema";
-import { eq, sql, inArray } from "drizzle-orm";
-import DashboardCharts from "@/components/DashboardCharts";
+"use client";
 
-export default async function ProjectDashboard(props: { params: Promise<{ id: string }> }) {
-  const { id } = await props.params;
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
-  const suites = await db.query.testSuites.findMany({ where: eq(testSuites.projectId, id) });
-  const suiteIds = suites.map((s) => s.id);
-  const caseCountRes = suiteIds.length
-    ? await db
-        .select({ count: sql<number>`count(*)` })
-        .from(testCases)
-        .where(inArray(testCases.suiteId, suiteIds))
-    : [{ count: 0 }];
+export default function LoginPage() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const runs = await db.query.testRuns.findMany({
-    where: eq(testRuns.projectId, id),
-    orderBy: (r, { desc }) => [desc(r.createdAt)],
-    limit: 10,
-  });
-
-  const runTrend = await Promise.all(
-    runs
-      .slice()
-      .reverse()
-      .map(async (r) => {
-        const rows = await db
-          .select({ status: testRunCases.status, count: sql<number>`count(*)` })
-          .from(testRunCases)
-          .where(eq(testRunCases.runId, r.id))
-          .groupBy(testRunCases.status);
-        const stats: Record<string, number> = {
-          untested: 0,
-          passed: 0,
-          failed: 0,
-          blocked: 0,
-          skipped: 0,
-        };
-        for (const row of rows) stats[row.status] = row.count;
-        const total = Object.values(stats).reduce((a, b) => a + b, 0);
-        return {
-          name: r.name.length > 18 ? r.name.slice(0, 18) + "…" : r.name,
-          passRate: total > 0 ? Math.round((stats.passed / total) * 100) : 0,
-          ...stats,
-          total,
-        };
-      })
-  );
-
-  const overallRows = runs.length
-    ? await db
-        .select({ status: testRunCases.status, count: sql<number>`count(*)` })
-        .from(testRunCases)
-        .where(
-          inArray(
-            testRunCases.runId,
-            runs.map((r) => r.id)
-          )
-        )
-        .groupBy(testRunCases.status)
-    : [];
-  const overallStats: Record<string, number> = {
-    untested: 0,
-    passed: 0,
-    failed: 0,
-    blocked: 0,
-    skipped: 0,
-  };
-  for (const row of overallRows) overallStats[row.status] = row.count;
-
-  const defectRows = await db
-    .select({ status: defects.status, count: sql<number>`count(*)` })
-    .from(defects)
-    .where(eq(defects.projectId, id))
-    .groupBy(defects.status);
-  const defectStats: Record<string, number> = { open: 0, in_progress: 0, closed: 0 };
-  for (const row of defectRows) defectStats[row.status] = row.count;
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
+    });
+    setLoading(false);
+    if (res?.error) {
+      setError("Correo o contraseña incorrectos");
+      return;
+    }
+    router.push(params.get("callbackUrl") || "/");
+    router.refresh();
+  }
 
   return (
-    <DashboardCharts
-      totalCases={caseCountRes[0]?.count ?? 0}
-      totalRuns={runs.length}
-      overallStats={overallStats}
-      runTrend={runTrend}
-      defectStats={defectStats}
-    />
+    <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
+        <h1 className="text-xl font-semibold text-slate-900 mb-1">
+          Test Manager
+        </h1>
+        <p className="text-sm text-slate-500 mb-6">
+          Inicia sesión para continuar
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm text-slate-700 mb-1">Correo</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-slate-700 mb-1">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-lg bg-teal-600 text-white text-sm font-medium py-2 hover:bg-teal-700 disabled:opacity-50"
+          >
+            {loading ? "Entrando..." : "Entrar"}
+          </button>
+        </form>
+        <p className="text-sm text-slate-500 mt-4">
+          ¿No tienes cuenta?{" "}
+          <Link href="/register" className="text-teal-600 hover:underline">
+            Regístrate
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

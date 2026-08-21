@@ -241,7 +241,7 @@ export default function RunExecution({
                           <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
                         </a>
                       ))}
-                      <label className="text-xs text-indigo-600 cursor-pointer hover:underline">
+                      <label className="text-xs text-teal-600 cursor-pointer hover:underline">
                         📸 Subir evidencia
                         <input
                           type="file"

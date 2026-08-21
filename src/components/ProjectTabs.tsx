@@ -27,7 +27,7 @@ export default function ProjectTabs({ projectId }: { projectId: string }) {
                 href={t.href}
                 className={`px-3 py-3 text-sm whitespace-nowrap border-b-2 ${
                   active
-                    ? "border-indigo-600 text-indigo-600 font-medium"
+                    ? "border-teal-600 text-teal-600 font-medium"
                     : "border-transparent text-slate-600 hover:text-slate-900"
                 }`}
               >

@@ -117,9 +117,9 @@ export default function SuitesExplorer({
             value={newSuiteName}
             onChange={(e) => setNewSuiteName(e.target.value)}
             placeholder="Nueva suite..."
-            className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
           />
-          <button className="rounded-lg bg-indigo-600 text-white px-3 text-sm hover:bg-indigo-700">
+          <button className="rounded-lg bg-teal-600 text-white px-3 text-sm hover:bg-teal-700">
             +
           </button>
         </form>
@@ -129,7 +129,7 @@ export default function SuitesExplorer({
               <div
                 className={`group flex items-center justify-between rounded-lg px-3 py-2 text-sm cursor-pointer ${
                   selectedSuite === s.id
-                    ? "bg-indigo-50 text-indigo-700"
+                    ? "bg-teal-50 text-teal-700"
                     : "hover:bg-slate-100 text-slate-700"
                 }`}
                 onClick={() => setSelectedSuite(s.id)}
@@ -167,7 +167,7 @@ export default function SuitesExplorer({
               </h3>
               <button
                 onClick={openNewCase}
-                className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-indigo-700"
+                className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
               >
                 + Nuevo caso
               </button>
@@ -176,7 +176,7 @@ export default function SuitesExplorer({
               {currentCases.map((c) => (
                 <div
                   key={c.id}
-                  className="bg-white border border-slate-200 rounded-lg p-4 hover:border-indigo-300"
+                  className="bg-white border border-slate-200 rounded-lg p-4 hover:border-teal-300"
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -213,7 +213,7 @@ export default function SuitesExplorer({
                     <div className="flex gap-3 text-xs">
                       <button
                         onClick={() => openEditCase(c)}
-                        className="text-indigo-600 hover:underline"
+                        className="text-teal-600 hover:underline"
                       >
                         Editar
                       </button>
@@ -348,7 +348,7 @@ function CaseModal({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
@@ -359,7 +359,7 @@ function CaseModal({
               value={preconditions}
               onChange={(e) => setPreconditions(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
@@ -412,7 +412,7 @@ function CaseModal({
               <button
                 type="button"
                 onClick={addStep}
-                className="text-xs text-indigo-600 hover:underline"
+                className="text-xs text-teal-600 hover:underline"
               >
                 + agregar paso
               </button>
@@ -477,7 +477,7 @@ function CaseModal({
             <button
               type="submit"
               disabled={loading}
-              className="rounded-lg bg-indigo-600 text-white text-sm font-medium px-4 py-2 hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
             >
               {loading ? "Guardando..." : "Guardar"}
             </button>
