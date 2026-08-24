@@ -2,19 +2,53 @@
 
 import { useState } from "react";
 
+type Kind = "daily" | "general";
+type Format = "docx" | "pdf";
+
+function FormatButtons({
+  kind,
+  downloading,
+  onDownload,
+}: {
+  kind: Kind;
+  downloading: `${Kind}-${Format}` | null;
+  onDownload: (kind: Kind, format: Format) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => onDownload(kind, "docx")}
+        disabled={downloading !== null}
+        className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50"
+      >
+        {downloading === `${kind}-docx` ? "Generando..." : "⬇ Word"}
+      </button>
+      <button
+        onClick={() => onDownload(kind, "pdf")}
+        disabled={downloading !== null}
+        className="rounded-lg bg-slate-700 text-white text-sm font-medium px-3 py-1.5 hover:bg-slate-800 disabled:opacity-50"
+      >
+        {downloading === `${kind}-pdf` ? "Generando..." : "⬇ PDF"}
+      </button>
+    </div>
+  );
+}
+
 export default function ReportsPanel({ projectId }: { projectId: string }) {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [downloading, setDownloading] = useState<"daily" | "general" | null>(null);
+  const [downloading, setDownloading] = useState<`${Kind}-${Format}` | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  async function download(kind: "daily" | "general") {
-    setDownloading(kind);
+  async function download(kind: Kind, format: Format) {
+    const key = `${kind}-${format}` as const;
+    setDownloading(key);
     setErrorMsg(null);
     try {
-      const url =
+      const base =
         kind === "daily"
           ? `/api/projects/${projectId}/reports/daily?date=${date}`
           : `/api/projects/${projectId}/reports/general`;
+      const url = `${base}${base.includes("?") ? "&" : "?"}format=${format}`;
       const res = await fetch(url);
       if (!res.ok) {
         setErrorMsg("No se pudo generar el reporte.");
@@ -23,7 +57,7 @@ export default function ReportsPanel({ projectId }: { projectId: string }) {
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") || "";
       const match = disposition.match(/filename="(.+?)"/);
-      const filename = match?.[1] || `reporte-${kind}.docx`;
+      const filename = match?.[1] || `reporte-${kind}.${format}`;
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
@@ -52,13 +86,7 @@ export default function ReportsPanel({ projectId }: { projectId: string }) {
               onChange={(e) => setDate(e.target.value)}
               className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
             />
-            <button
-              onClick={() => download("daily")}
-              disabled={downloading === "daily"}
-              className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50"
-            >
-              {downloading === "daily" ? "Generando..." : "⬇ Descargar (Word)"}
-            </button>
+            <FormatButtons kind="daily" downloading={downloading} onDownload={download} />
           </div>
         </div>
 
@@ -67,13 +95,7 @@ export default function ReportsPanel({ projectId }: { projectId: string }) {
           <p className="text-sm text-slate-500 mb-4">
             Totales acumulados del proyecto: suites, casos, planes, runs y defectos.
           </p>
-          <button
-            onClick={() => download("general")}
-            disabled={downloading === "general"}
-            className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50"
-          >
-            {downloading === "general" ? "Generando..." : "⬇ Descargar (Word)"}
-          </button>
+          <FormatButtons kind="general" downloading={downloading} onDownload={download} />
         </div>
       </div>
     </div>

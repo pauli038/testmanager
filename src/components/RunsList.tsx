@@ -135,9 +135,9 @@ export default function RunsList({
                 href={`/projects/${projectId}/runs/${r.id}`}
                 className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-teal-300"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-medium text-slate-900 text-sm">{r.name}</h4>
                       {r.source === "playwright" && (
                         <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
@@ -158,24 +158,25 @@ export default function RunsList({
                       {r.total} casos · {pct}% aprobado
                     </p>
                   </div>
-                  <div className="flex gap-3 text-xs text-slate-600">
+                  <div className="grid grid-cols-5 gap-x-3 text-xs text-slate-600 text-right tabular-nums shrink-0">
                     <span>✅ {r.stats.passed || 0}</span>
                     <span>❌ {r.stats.failed || 0}</span>
-                    <span>⏭️ {r.stats.skipped || 0}</span>
                     <span>🚫 {r.stats.blocked || 0}</span>
+                    <span>⏭️ {r.stats.skipped || 0}</span>
                     <span>⚪ {r.stats.untested || 0}</span>
                   </div>
                 </div>
-                <div className="flex h-1.5 rounded-full overflow-hidden mt-3 bg-slate-100">
-                  {(["passed", "failed", "blocked", "skipped"] as const).map((k) =>
-                    r.stats[k] ? (
-                      <div
-                        key={k}
-                        className={statusColors[k]}
-                        style={{ width: `${(r.stats[k] / r.total) * 100}%` }}
-                      />
-                    ) : null
-                  )}
+                <div className="flex h-2 rounded-full overflow-hidden mt-3 bg-slate-100">
+                  {r.total > 0 &&
+                    (["passed", "failed", "blocked", "skipped"] as const).map((k) =>
+                      r.stats[k] ? (
+                        <div
+                          key={k}
+                          className={statusColors[k]}
+                          style={{ width: `${(r.stats[k] / r.total) * 100}%` }}
+                        />
+                      ) : null
+                    )}
                 </div>
               </Link>
             );

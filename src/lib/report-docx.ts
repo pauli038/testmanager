@@ -9,8 +9,9 @@ import {
   TableCell,
   WidthType,
 } from "docx";
+import type { ReportData } from "./report-data";
 
-export function statsTable(rows: { label: string; value: string | number }[]): Table {
+function statsTable(rows: { label: string; value: string | number }[]): Table {
   const headerRow = new TableRow({
     tableHeader: true,
     children: [
@@ -44,20 +45,16 @@ export function statsTable(rows: { label: string; value: string | number }[]): T
   return new Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } });
 }
 
-export function buildReportDocument(
-  title: string,
-  subtitle: string,
-  sections: { heading: string; table: Table }[]
-): Document {
+export function buildReportDocx(data: ReportData): Document {
   const children: (Paragraph | Table)[] = [
-    new Paragraph({ text: title, heading: HeadingLevel.HEADING_1 }),
-    new Paragraph({ text: subtitle, spacing: { after: 300 } }),
+    new Paragraph({ text: data.title, heading: HeadingLevel.HEADING_1 }),
+    new Paragraph({ text: data.subtitle, spacing: { after: 300 } }),
   ];
-  for (const s of sections) {
+  for (const s of data.sections) {
     children.push(
       new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 } })
     );
-    children.push(s.table);
+    children.push(statsTable(s.rows));
   }
   return new Document({ sections: [{ children }] });
 }
