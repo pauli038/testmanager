@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import ConfirmModal from "./ConfirmModal";
 
 type Suite = { id: string; name: string };
 type CaseRef = { id: string; title: string };
@@ -32,6 +34,7 @@ export default function RunsList({
   suites: Suite[];
   casesBySuite: Record<string, CaseRef[]>;
 }) {
+  const router = useRouter();
   const [runs, setRuns] = useState<Run[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -39,6 +42,9 @@ export default function RunsList({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sourceFilter, setSourceFilter] = useState<"all" | "manual" | "playwright">("all");
   const [dateFilter, setDateFilter] = useState("");
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/runs`)
@@ -48,6 +54,34 @@ export default function RunsList({
         setLoading(false);
       });
   }, [projectId]);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    function onClickOutside(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setOpenMenu(null);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [openMenu]);
+
+  async function toggleRunStatus(id: string, currentStatus: string) {
+    const status = currentStatus === "completed" ? "active" : "completed";
+    setOpenMenu(null);
+    const res = await fetch(`/api/runs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      setRuns((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)));
+    }
+  }
+
+  async function removeRun(id: string) {
+    await fetch(`/api/runs/${id}`, { method: "DELETE" });
+    setRuns((rs) => rs.filter((r) => r.id !== id));
+    setPendingDelete(null);
+  }
 
   function toggleCase(id: string) {
     setSelected((s) => {
@@ -75,7 +109,7 @@ export default function RunsList({
       body: JSON.stringify({ name, caseIds: Array.from(selected) }),
     });
     if (res.ok) {
-      window.location.href = `/projects/${projectId}/runs/${(await res.json()).id}`;
+      router.push(`/projects/${projectId}/runs/${(await res.json()).id}`);
     }
   }
 
@@ -153,61 +187,106 @@ export default function RunsList({
             : "No hay runs que coincidan con este filtro."}
         </p>
       ) : (
-        <div className="space-y-2">
-          {filteredRuns.map((r) => {
-            const pct = r.total > 0 ? Math.round(((r.stats.passed || 0) / r.total) * 100) : 0;
-            return (
-              <Link
-                key={r.id}
-                href={`/projects/${projectId}/runs/${r.id}`}
-                className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-teal-300"
-              >
-                <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto">
+          <div className="min-w-[820px]">
+            <div className="grid grid-cols-[2fr_110px_180px_90px_140px_40px] gap-3 items-center px-4 py-2 border-b border-slate-100 text-xs font-medium text-slate-400 uppercase tracking-wide">
+              <span>Nombre</span>
+              <span>Estado</span>
+              <span>Progreso</span>
+              <span>Casos</span>
+              <span>Creado</span>
+              <span />
+            </div>
+            {filteredRuns.map((r) => {
+              const pct = r.total > 0 ? Math.round(((r.stats.passed || 0) / r.total) * 100) : 0;
+              return (
+                <div
+                  key={r.id}
+                  className="grid grid-cols-[2fr_110px_180px_90px_140px_40px] gap-3 items-center px-4 py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50"
+                >
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-medium text-slate-900 text-sm">{r.name}</h4>
-                      {r.source === "playwright" && (
-                        <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
-                          🤖 Playwright
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs rounded px-1.5 py-0.5 ${
-                          r.status === "completed"
-                            ? "bg-slate-100 text-slate-600"
-                            : "bg-teal-100 text-teal-700"
-                        }`}
-                      >
-                        {r.status === "completed" ? "Completado" : "Activo"}
+                    <Link
+                      href={`/projects/${projectId}/runs/${r.id}`}
+                      className="font-medium text-slate-900 text-sm hover:text-teal-700 hover:underline truncate block"
+                    >
+                      {r.name}
+                    </Link>
+                    {r.source === "playwright" && (
+                      <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 mt-1 inline-block">
+                        🤖 Playwright
                       </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {r.total} casos · {pct}% aprobado
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-5 gap-x-3 text-xs text-slate-600 text-right tabular-nums shrink-0">
-                    <span>✅ {r.stats.passed || 0}</span>
-                    <span>❌ {r.stats.failed || 0}</span>
-                    <span>🚫 {r.stats.blocked || 0}</span>
-                    <span>⏭️ {r.stats.skipped || 0}</span>
-                    <span>⚪ {r.stats.untested || 0}</span>
-                  </div>
-                </div>
-                <div className="flex h-2 rounded-full overflow-hidden mt-3 bg-slate-100">
-                  {r.total > 0 &&
-                    (["passed", "failed", "blocked", "skipped"] as const).map((k) =>
-                      r.stats[k] ? (
-                        <div
-                          key={k}
-                          className={statusColors[k]}
-                          style={{ width: `${(r.stats[k] / r.total) * 100}%` }}
-                        />
-                      ) : null
                     )}
+                  </div>
+                  <span>
+                    <span
+                      className={`text-xs rounded px-1.5 py-0.5 ${
+                        r.status === "completed"
+                          ? "bg-slate-100 text-slate-600"
+                          : "bg-teal-100 text-teal-700"
+                      }`}
+                    >
+                      {r.status === "completed" ? "Completado" : "Activo"}
+                    </span>
+                  </span>
+                  <div>
+                    <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
+                      {r.total > 0 &&
+                        (["passed", "failed", "blocked", "skipped"] as const).map((k) =>
+                          r.stats[k] ? (
+                            <div
+                              key={k}
+                              className={statusColors[k]}
+                              style={{ width: `${(r.stats[k] / r.total) * 100}%` }}
+                            />
+                          ) : null
+                        )}
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">{pct}% aprobado</p>
+                  </div>
+                  <span className="text-xs text-slate-600">{r.total} casos</span>
+                  <span className="text-xs text-slate-500">
+                    {new Date(r.createdAt).toLocaleDateString()}
+                  </span>
+                  <div className="relative flex justify-end">
+                    <button
+                      onClick={() => setOpenMenu((m) => (m === r.id ? null : r.id))}
+                      className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded px-1.5 py-1"
+                    >
+                      ⋯
+                    </button>
+                    {openMenu === r.id && (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-0 top-8 z-10 w-44 bg-white border border-slate-200 rounded-lg shadow-lg py-1 text-sm"
+                      >
+                        <button
+                          onClick={() => router.push(`/projects/${projectId}/runs/${r.id}`)}
+                          className="w-full text-left px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+                        >
+                          Ver
+                        </button>
+                        <button
+                          onClick={() => toggleRunStatus(r.id, r.status)}
+                          className="w-full text-left px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+                        >
+                          {r.status === "completed" ? "Reactivar" : "Marcar completado"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setOpenMenu(null);
+                            setPendingDelete(r.id);
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </Link>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -281,6 +360,13 @@ export default function RunsList({
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={pendingDelete !== null}
+        message="¿Eliminar este test run? Se perderán los resultados de ejecución."
+        onConfirm={() => pendingDelete && removeRun(pendingDelete)}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }
