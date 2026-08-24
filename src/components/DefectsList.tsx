@@ -41,23 +41,53 @@ export default function DefectsList({
 }) {
   const [defects, setDefects] = useState(initialDefects);
   const [open, setOpen] = useState(false);
+  const [editingDefect, setEditingDefect] = useState<Defect | null>(null);
+  const [viewingDefect, setViewingDefect] = useState<Defect | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
-  async function create(e: React.FormEvent) {
+  function openNew() {
+    setEditingDefect(null);
+    setTitle("");
+    setDescription("");
+    setSeverity("medium");
+    setOpen(true);
+  }
+
+  function openEditDefect(d: Defect) {
+    setEditingDefect(d);
+    setTitle(d.title);
+    setDescription(d.description || "");
+    setSeverity(d.severity);
+    setOpen(true);
+  }
+
+  async function saveDefect(e: React.FormEvent) {
     e.preventDefault();
-    const res = await fetch(`/api/projects/${projectId}/defects`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description, severity }),
-    });
+    const res = editingDefect
+      ? await fetch(`/api/defects/${editingDefect.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, description, severity, status: editingDefect.status }),
+        })
+      : await fetch(`/api/projects/${projectId}/defects`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, description, severity }),
+        });
     if (res.ok) {
-      const newDefect = await res.json();
-      setDefects((d) => [newDefect, ...d]);
+      const saved = await res.json();
+      if (editingDefect) {
+        setDefects((d) => d.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)));
+        if (viewingDefect?.id === saved.id) setViewingDefect((v) => (v ? { ...v, ...saved } : v));
+      } else {
+        setDefects((d) => [saved, ...d]);
+      }
       setTitle("");
       setDescription("");
+      setEditingDefect(null);
       setOpen(false);
     }
   }
@@ -99,7 +129,7 @@ export default function DefectsList({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium text-slate-700">Defectos / Bugs</h3>
         <button
-          onClick={() => setOpen(true)}
+          onClick={openNew}
           className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
         >
           + Nuevo defecto
@@ -158,6 +188,18 @@ export default function DefectsList({
                   <option value="closed">Cerrado</option>
                 </select>
                 <button
+                  onClick={() => setViewingDefect(d)}
+                  className="text-xs text-slate-600 hover:underline"
+                >
+                  Ver
+                </button>
+                <button
+                  onClick={() => openEditDefect(d)}
+                  className="text-xs text-teal-600 hover:underline"
+                >
+                  Editar
+                </button>
+                <button
                   onClick={() => setPendingDelete(d.id)}
                   className="text-xs text-slate-400 hover:text-red-600"
                 >
@@ -177,8 +219,10 @@ export default function DefectsList({
       {open && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Nuevo defecto</h2>
-            <form onSubmit={create} className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">
+              {editingDefect ? "Editar defecto" : "Nuevo defecto"}
+            </h2>
+            <form onSubmit={saveDefect} className="space-y-4">
               <div>
                 <label className="block text-sm text-slate-700 mb-1">Título</label>
                 <input
@@ -213,16 +257,96 @@ export default function DefectsList({
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    setOpen(false);
+                    setEditingDefect(null);
+                  }}
                   className="text-sm text-slate-600 px-4 py-2"
                 >
                   Cancelar
                 </button>
                 <button className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700">
-                  Crear
+                  {editingDefect ? "Guardar" : "Crear"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {viewingDefect && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-start justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-900">🐞 {viewingDefect.title}</h2>
+              <span
+                className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap ml-2 ${statusColors[viewingDefect.status]}`}
+              >
+                {statusLabels[viewingDefect.status] || viewingDefect.status}
+              </span>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <span
+                className={`text-xs rounded px-1.5 py-0.5 ${severityColors[viewingDefect.severity]}`}
+              >
+                {viewingDefect.severity}
+              </span>
+            </div>
+
+            {viewingDefect.description && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-slate-700 mb-1">Descripción</h3>
+                <p className="text-sm text-slate-600 whitespace-pre-wrap">
+                  {viewingDefect.description}
+                </p>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <h3 className="text-sm font-medium text-slate-700 mb-1">Creado</h3>
+              <p className="text-sm text-slate-600">
+                {new Date(viewingDefect.createdAt).toLocaleString()}
+              </p>
+            </div>
+
+            {viewingDefect.attachments.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium text-slate-700 mb-2">Evidencia</h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {viewingDefect.attachments.map((a) => (
+                    <a
+                      key={a.id}
+                      href={a.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block w-16 h-16 rounded border border-slate-200 overflow-hidden"
+                    >
+                      <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setViewingDefect(null)}
+                className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
+              >
+                Cerrar
+              </button>
+              <button
+                onClick={() => {
+                  const d = viewingDefect;
+                  setViewingDefect(null);
+                  openEditDefect(d);
+                }}
+                className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700"
+              >
+                Editar
+              </button>
+            </div>
           </div>
         </div>
       )}
