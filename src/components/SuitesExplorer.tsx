@@ -44,6 +44,7 @@ export default function SuitesExplorer({
   const [newSuiteName, setNewSuiteName] = useState("");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [editingCase, setEditingCase] = useState<TestCase | null>(null);
+  const [viewingCase, setViewingCase] = useState<TestCase | null>(null);
   const [pendingDeleteSuite, setPendingDeleteSuite] = useState<string | null>(null);
   const [pendingDeleteCase, setPendingDeleteCase] = useState<{ caseId: string; suiteId: string } | null>(
     null
@@ -82,6 +83,10 @@ export default function SuitesExplorer({
   function openEditCase(c: TestCase) {
     setEditingCase(c);
     setShowCaseModal(true);
+  }
+
+  function openViewCase(c: TestCase) {
+    setViewingCase(c);
   }
 
   async function deleteCase(caseId: string, suiteId: string) {
@@ -212,6 +217,12 @@ export default function SuitesExplorer({
                     </div>
                     <div className="flex gap-3 text-xs">
                       <button
+                        onClick={() => openViewCase(c)}
+                        className="text-slate-600 hover:underline"
+                      >
+                        Ver
+                      </button>
+                      <button
                         onClick={() => openEditCase(c)}
                         className="text-teal-600 hover:underline"
                       >
@@ -250,6 +261,17 @@ export default function SuitesExplorer({
         />
       )}
 
+      {viewingCase && (
+        <ViewCaseModal
+          testCase={viewingCase}
+          onClose={() => setViewingCase(null)}
+          onEdit={() => {
+            setViewingCase(null);
+            openEditCase(viewingCase);
+          }}
+        />
+      )}
+
       <ConfirmModal
         open={pendingDeleteSuite !== null}
         message="¿Eliminar esta suite y todos sus casos?"
@@ -265,6 +287,129 @@ export default function SuitesExplorer({
         }
         onCancel={() => setPendingDeleteCase(null)}
       />
+    </div>
+  );
+}
+
+const priorityLabels: Record<string, string> = {
+  low: "Baja",
+  medium: "Media",
+  high: "Alta",
+  critical: "Crítica",
+};
+
+const typeLabels: Record<string, string> = {
+  functional: "Funcional",
+  regression: "Regresión",
+  smoke: "Smoke",
+  e2e: "E2E",
+  api: "API",
+  other: "Otro",
+};
+
+function ViewCaseModal({
+  testCase,
+  onClose,
+  onEdit,
+}: {
+  testCase: TestCase;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  const steps: Step[] = testCase.steps ? JSON.parse(testCase.steps) : [];
+  const tags = testCase.tags?.split(",").filter(Boolean) || [];
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+        <div className="flex items-start justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">{testCase.title}</h2>
+          {testCase.automated && (
+            <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 whitespace-nowrap ml-2">
+              🤖 automatizado
+            </span>
+          )}
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <span
+            className={`text-xs rounded px-1.5 py-0.5 ${priorityColors[testCase.priority]}`}
+          >
+            {priorityLabels[testCase.priority] || testCase.priority}
+          </span>
+          <span className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
+            {typeLabels[testCase.type] || testCase.type}
+          </span>
+          {tags.map((t) => (
+            <span
+              key={t}
+              className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5"
+            >
+              #{t.trim()}
+            </span>
+          ))}
+        </div>
+
+        {testCase.preconditions && (
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-slate-700 mb-1">Precondiciones</h3>
+            <p className="text-sm text-slate-600 whitespace-pre-wrap">
+              {testCase.preconditions}
+            </p>
+          </div>
+        )}
+
+        <div className="mb-4">
+          <h3 className="text-sm font-medium text-slate-700 mb-2">
+            Pasos y resultado esperado
+          </h3>
+          {steps.length > 0 ? (
+            <div className="space-y-2">
+              {steps.map((s, i) => (
+                <div
+                  key={i}
+                  className="flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-lg p-3"
+                >
+                  <span className="text-xs text-slate-400 mt-0.5 w-4">{i + 1}.</span>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-800 whitespace-pre-wrap">{s.step}</p>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs text-slate-400 mb-0.5">Resultado esperado</p>
+                    <p className="text-sm text-slate-600 whitespace-pre-wrap">{s.expected}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400">Sin pasos definidos.</p>
+          )}
+        </div>
+
+        {testCase.automated && testCase.automationId && (
+          <div className="mb-4">
+            <h3 className="text-sm font-medium text-slate-700 mb-1">
+              ID/título del test en Playwright
+            </h3>
+            <p className="text-sm text-slate-600">{testCase.automationId}</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button
+            onClick={onClose}
+            className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
+          >
+            Cerrar
+          </button>
+          <button
+            onClick={onEdit}
+            className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700"
+          >
+            Editar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
