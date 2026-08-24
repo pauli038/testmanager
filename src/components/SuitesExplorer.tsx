@@ -28,10 +28,10 @@ const priorityColors: Record<string, string> = {
 };
 
 const lastStatusConfig: Record<string, { icon: string; classes: string; label: string }> = {
-  passed: { icon: "✅", classes: "bg-emerald-100 text-emerald-700", label: "Aprobado" },
-  failed: { icon: "❌", classes: "bg-red-100 text-red-700", label: "Fallido" },
-  blocked: { icon: "🚫", classes: "bg-orange-100 text-orange-700", label: "Bloqueado" },
-  skipped: { icon: "⏭️", classes: "bg-slate-100 text-slate-500", label: "Omitido" },
+  passed: { icon: "✅", classes: "bg-emerald-100 text-emerald-700", label: "Passed" },
+  failed: { icon: "❌", classes: "bg-red-100 text-red-700", label: "Failed" },
+  blocked: { icon: "🚫", classes: "bg-orange-100 text-orange-700", label: "Blocked" },
+  skipped: { icon: "⏭️", classes: "bg-slate-100 text-slate-500", label: "Skipped" },
 };
 
 export default function SuitesExplorer({
@@ -210,7 +210,7 @@ export default function SuitesExplorer({
                         )}
                         {c.lastStatus && lastStatusConfig[c.lastStatus] && (
                           <span
-                            className={`text-xs rounded px-1.5 py-0.5 ${lastStatusConfig[c.lastStatus].classes}`}
+                            className={`text-xs font-medium rounded-full px-2.5 py-1 ${lastStatusConfig[c.lastStatus].classes}`}
                           >
                             {lastStatusConfig[c.lastStatus].icon} {lastStatusConfig[c.lastStatus].label}
                           </span>
@@ -353,7 +353,7 @@ function ViewCaseModal({
             )}
             {testCase.lastStatus && lastStatusConfig[testCase.lastStatus] && (
               <span
-                className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap ${
+                className={`text-xs font-medium rounded-full px-2.5 py-1 whitespace-nowrap ${
                   lastStatusConfig[testCase.lastStatus].classes
                 }`}
               >
