@@ -89,6 +89,7 @@ export const testSuitesRelations = relations(testSuites, ({ one, many }) => ({
     references: [projects.id],
   }),
   cases: many(testCases),
+  planSuites: many(testPlanSuites),
 }));
 
 // ---------- Test Cases ----------
@@ -142,6 +143,30 @@ export const testPlansRelations = relations(testPlans, ({ one, many }) => ({
     references: [projects.id],
   }),
   runs: many(testRuns),
+  planSuites: many(testPlanSuites),
+}));
+
+// ---------- Test Plan Suites (links a plan to the suites it covers) ----------
+export const testPlanSuites = pgTable("test_plan_suites", {
+  id: id(),
+  planId: text("plan_id")
+    .notNull()
+    .references(() => testPlans.id, { onDelete: "cascade" }),
+  suiteId: text("suite_id")
+    .notNull()
+    .references(() => testSuites.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+});
+
+export const testPlanSuitesRelations = relations(testPlanSuites, ({ one }) => ({
+  plan: one(testPlans, {
+    fields: [testPlanSuites.planId],
+    references: [testPlans.id],
+  }),
+  suite: one(testSuites, {
+    fields: [testPlanSuites.suiteId],
+    references: [testSuites.id],
+  }),
 }));
 
 // ---------- Test Runs ----------

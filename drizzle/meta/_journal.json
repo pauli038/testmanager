@@ -15,6 +15,13 @@
       "when": 1787347993130,
       "tag": "0001_nice_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787580519325,
+      "tag": "0002_amazing_mantis",
+      "breakpoints": true
     }
   ]
 }

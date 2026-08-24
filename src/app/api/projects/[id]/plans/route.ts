@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { testPlans } from "@/db/schema";
+import { testPlans, testPlanSuites, testSuites } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { error } = await requireUser();
@@ -11,8 +11,13 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const plans = await db.query.testPlans.findMany({
     where: eq(testPlans.projectId, id),
     orderBy: (p, { desc }) => [desc(p.createdAt)],
+    with: { planSuites: { with: { suite: true } } },
   });
-  return NextResponse.json(plans);
+  const withSuites = plans.map(({ planSuites, ...p }) => ({
+    ...p,
+    suites: planSuites.map((ps) => ({ id: ps.suite.id, name: ps.suite.name })),
+  }));
+  return NextResponse.json(withSuites);
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -21,6 +26,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   const body = await req.json();
   if (!body.name) return NextResponse.json({ error: "Nombre requerido" }, { status: 400 });
+  const suiteIds: string[] = body.suiteIds || [];
 
   const [plan] = await db
     .insert(testPlans)
@@ -32,5 +38,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     })
     .returning();
 
-  return NextResponse.json(plan, { status: 201 });
+  let suites: { id: string; name: string }[] = [];
+  if (suiteIds.length > 0) {
+    await db.insert(testPlanSuites).values(
+      suiteIds.map((suiteId) => ({ planId: plan.id, suiteId }))
+    );
+    suites = await db.query.testSuites.findMany({
+      where: inArray(testSuites.id, suiteIds),
+      columns: { id: true, name: true },
+    });
+  }
+
+  return NextResponse.json({ ...plan, suites }, { status: 201 });
 }
