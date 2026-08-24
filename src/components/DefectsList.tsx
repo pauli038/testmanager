@@ -189,19 +189,19 @@ export default function DefectsList({
                 </select>
                 <button
                   onClick={() => setViewingDefect(d)}
-                  className="text-xs text-slate-600 hover:underline"
+                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Ver
                 </button>
                 <button
                   onClick={() => openEditDefect(d)}
-                  className="text-xs text-teal-600 hover:underline"
+                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100"
                 >
                   Editar
                 </button>
                 <button
                   onClick={() => setPendingDelete(d.id)}
-                  className="text-xs text-slate-400 hover:text-red-600"
+                  className="text-xs font-medium rounded-lg px-2 py-1 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-600"
                 >
                   ✕
                 </button>
