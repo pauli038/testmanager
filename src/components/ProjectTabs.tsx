@@ -12,6 +12,7 @@ export default function ProjectTabs({ projectId }: { projectId: string }) {
     { href: `${base}/plans`, label: "📝 Planes" },
     { href: `${base}/runs`, label: "▶️ Runs" },
     { href: `${base}/defects`, label: "🐞 Defectos" },
+    { href: `${base}/reports`, label: "📄 Reportes" },
     { href: `${base}/settings`, label: "⚙️ Ajustes" },
   ];
 
