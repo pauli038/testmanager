@@ -43,6 +43,9 @@ export default function DefectsList({
   const [open, setOpen] = useState(false);
   const [editingDefect, setEditingDefect] = useState<Defect | null>(null);
   const [viewingDefect, setViewingDefect] = useState<Defect | null>(null);
+  const [viewingImage, setViewingImage] = useState<{ filename: string; url: string } | null>(
+    null
+  );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
@@ -152,15 +155,14 @@ export default function DefectsList({
                 </div>
                 <div className="flex items-center gap-2 flex-wrap mt-2">
                   {d.attachments.map((a) => (
-                    <a
+                    <button
                       key={a.id}
-                      href={a.url}
-                      target="_blank"
-                      rel="noreferrer"
+                      type="button"
+                      onClick={() => setViewingImage(a)}
                       className="block w-12 h-12 rounded border border-slate-200 overflow-hidden"
                     >
                       <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                    </a>
+                    </button>
                   ))}
                   <label className="text-xs text-teal-600 cursor-pointer hover:underline">
                     📸 Subir evidencia
@@ -315,15 +317,14 @@ export default function DefectsList({
                 <h3 className="text-sm font-medium text-slate-700 mb-2">Evidencia</h3>
                 <div className="flex items-center gap-2 flex-wrap">
                   {viewingDefect.attachments.map((a) => (
-                    <a
+                    <button
                       key={a.id}
-                      href={a.url}
-                      target="_blank"
-                      rel="noreferrer"
+                      type="button"
+                      onClick={() => setViewingImage(a)}
                       className="block w-16 h-16 rounded border border-slate-200 overflow-hidden"
                     >
                       <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                    </a>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -346,6 +347,44 @@ export default function DefectsList({
               >
                 Editar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingImage && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4"
+          onClick={() => setViewingImage(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 p-3 border-b border-slate-100">
+              <span className="text-sm text-slate-700 truncate">{viewingImage.filename}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={viewingImage.url}
+                  download={viewingImage.filename}
+                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100"
+                >
+                  ⬇ Descargar
+                </a>
+                <button
+                  onClick={() => setViewingImage(null)}
+                  className="text-xs font-medium rounded-lg px-2 py-1 bg-slate-100 text-slate-500 hover:bg-slate-200"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="overflow-auto p-4 flex items-center justify-center bg-slate-50">
+              <img
+                src={viewingImage.url}
+                alt={viewingImage.filename}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
             </div>
           </div>
         </div>
