@@ -8,7 +8,7 @@ import {
   testCases,
   attachments,
 } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 
 // Playwright integration endpoint.
 // Auth: header "x-api-key: tm_xxx" (create one in Project > Settings > API Keys)
@@ -81,11 +81,26 @@ export async function POST(req: NextRequest) {
     })
     .returning();
 
+  // Cases must belong to this project — otherwise an automationId shared with
+  // another project's case could match the wrong one.
+  const projectSuiteIds = (
+    await db.query.testSuites.findMany({
+      where: eq(testSuites.projectId, keyRecord.projectId),
+      columns: { id: true },
+    })
+  ).map((s) => s.id);
+
   const created = [];
   for (const r of results) {
+    // Match by the full titlePath (recommended, set via automationId) or by
+    // the test's short title — some users paste the short title instead.
     let testCase = await db.query.testCases.findFirst({
       where: and(
-        eq(testCases.automationId, r.automationId),
+        inArray(testCases.suiteId, projectSuiteIds),
+        or(
+          eq(testCases.automationId, r.automationId),
+          eq(testCases.automationId, r.title || r.automationId)
+        )
       ),
     });
 
