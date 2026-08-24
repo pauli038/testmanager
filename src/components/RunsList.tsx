@@ -126,47 +126,36 @@ export default function RunsList({
             : "No hay runs que coincidan con este filtro."}
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {filteredRuns.map((r) => {
             const pct = r.total > 0 ? Math.round(((r.stats.passed || 0) / r.total) * 100) : 0;
             return (
               <Link
                 key={r.id}
                 href={`/projects/${projectId}/runs/${r.id}`}
-                className="block bg-white border border-slate-200 rounded-lg p-4 hover:border-teal-300"
+                className="block bg-white border border-slate-200 rounded-lg p-3.5 hover:border-teal-300"
               >
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-medium text-slate-900 text-sm">{r.name}</h4>
-                      {r.source === "playwright" && (
-                        <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
-                          🤖 Playwright
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs rounded px-1.5 py-0.5 ${
-                          r.status === "completed"
-                            ? "bg-slate-100 text-slate-600"
-                            : "bg-teal-100 text-teal-700"
-                        }`}
-                      >
-                        {r.status === "completed" ? "Completado" : "Activo"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {r.total} casos · {pct}% aprobado
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-5 gap-x-3 text-xs text-slate-600 text-right tabular-nums shrink-0">
-                    <span>✅ {r.stats.passed || 0}</span>
-                    <span>❌ {r.stats.failed || 0}</span>
-                    <span>🚫 {r.stats.blocked || 0}</span>
-                    <span>⏭️ {r.stats.skipped || 0}</span>
-                    <span>⚪ {r.stats.untested || 0}</span>
-                  </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-medium text-slate-900 text-sm truncate">{r.name}</h4>
+                  {r.source === "playwright" && (
+                    <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 shrink-0">
+                      🤖 Playwright
+                    </span>
+                  )}
+                  <span
+                    className={`text-xs rounded px-1.5 py-0.5 shrink-0 ${
+                      r.status === "completed"
+                        ? "bg-slate-100 text-slate-600"
+                        : "bg-teal-100 text-teal-700"
+                    }`}
+                  >
+                    {r.status === "completed" ? "Completado" : "Activo"}
+                  </span>
                 </div>
-                <div className="flex h-2 rounded-full overflow-hidden mt-3 bg-slate-100">
+                <p className="text-xs text-slate-400 mt-1 mb-2.5">
+                  {r.total} casos · {pct}% aprobado
+                </p>
+                <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
                   {r.total > 0 &&
                     (["passed", "failed", "blocked", "skipped"] as const).map((k) =>
                       r.stats[k] ? (
@@ -177,6 +166,13 @@ export default function RunsList({
                         />
                       ) : null
                     )}
+                </div>
+                <div className="grid grid-cols-5 gap-x-1 text-xs text-slate-600 text-center tabular-nums mt-2.5">
+                  <span>✅ {r.stats.passed || 0}</span>
+                  <span>❌ {r.stats.failed || 0}</span>
+                  <span>🚫 {r.stats.blocked || 0}</span>
+                  <span>⏭️ {r.stats.skipped || 0}</span>
+                  <span>⚪ {r.stats.untested || 0}</span>
                 </div>
               </Link>
             );
