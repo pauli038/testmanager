@@ -5,6 +5,19 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 export type ReportSection = { heading: string; rows: { label: string; value: string | number }[] };
 export type ReportData = { title: string; subtitle: string; sections: ReportSection[]; filenameBase: string };
 
+const severityLabels: Record<string, string> = {
+  low: "Baja",
+  medium: "Media",
+  high: "Alta",
+  critical: "Crítica",
+};
+
+const defectStatusLabels: Record<string, string> = {
+  open: "Abierto",
+  in_progress: "En progreso",
+  closed: "Cerrado",
+};
+
 async function getProjectOrThrow(projectId: string) {
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!project) throw new Error("NOT_FOUND");
@@ -183,5 +196,55 @@ export async function getGeneralReportData(projectId: string): Promise<ReportDat
       },
     ],
     filenameBase: `reporte-general-${safeName}`,
+  };
+}
+
+export async function getDefectsReportData(projectId: string, date?: string): Promise<ReportData> {
+  const project = await getProjectOrThrow(projectId);
+
+  const rows = date
+    ? await db.query.defects.findMany({
+        where: and(
+          eq(defects.projectId, projectId),
+          sql`coalesce(${defects.detectedAt}, ${defects.createdAt})::date = ${date}::date`
+        ),
+        orderBy: (d, { desc }) => [desc(d.createdAt)],
+        with: { case: { columns: { title: true } } },
+      })
+    : await db.query.defects.findMany({
+        where: eq(defects.projectId, projectId),
+        orderBy: (d, { desc }) => [desc(d.createdAt)],
+        with: { case: { columns: { title: true } } },
+      });
+
+  const sections = rows.map((d) => {
+    const steps: string[] = d.stepsToReproduce ? JSON.parse(d.stepsToReproduce) : [];
+    return {
+      heading: d.title,
+      rows: [
+        { label: "Estado", value: defectStatusLabels[d.status] || d.status },
+        { label: "Severidad", value: severityLabels[d.severity] || d.severity },
+        { label: "Módulo / Sección", value: d.module || "—" },
+        { label: "Ambiente", value: d.environment || "—" },
+        { label: "Fecha de detección", value: d.detectedAt || "—" },
+        { label: "Caso de prueba relacionado", value: d.case?.title || "—" },
+        { label: "Descripción", value: d.description || "—" },
+        {
+          label: "Pasos a reproducir",
+          value: steps.length ? steps.map((s, i) => `${i + 1}. ${s}`).join("\n") : "—",
+        },
+      ],
+    };
+  });
+
+  const safeName = project.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+
+  return {
+    title: `Reporte de defectos - ${project.name}`,
+    subtitle: date ? `Fecha: ${date}` : `Todos los defectos · Generado: ${new Date().toLocaleString("es-ES")}`,
+    sections: sections.length
+      ? sections
+      : [{ heading: "Sin defectos", rows: [{ label: "Resultado", value: "No hay defectos que coincidan" }] }],
+    filenameBase: date ? `reporte-defectos-${date}` : `reporte-defectos-${safeName}`,
   };
 }

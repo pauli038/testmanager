@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { defects } from "@/db/schema";
+import { defects, testCases } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
 import { eq } from "drizzle-orm";
 
@@ -11,7 +11,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const all = await db.query.defects.findMany({
     where: eq(defects.projectId, id),
     orderBy: (d, { desc }) => [desc(d.createdAt)],
-    with: { attachments: true },
+    with: { attachments: true, case: { columns: { id: true, title: true } } },
   });
   const result = all.map((d) => ({
     ...d,
@@ -36,12 +36,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .values({
       projectId: id,
       runCaseId: body.runCaseId || null,
+      caseId: body.caseId || null,
       title: body.title,
       description: body.description || null,
+      stepsToReproduce: JSON.stringify(body.stepsToReproduce || []),
+      module: body.module || null,
+      environment: body.environment || null,
+      detectedAt: body.detectedAt || null,
       severity: body.severity || "medium",
       createdBy: user!.id,
     })
     .returning();
 
-  return NextResponse.json({ ...defect, attachments: [] }, { status: 201 });
+  const relatedCase = defect.caseId
+    ? await db.query.testCases.findFirst({
+        where: eq(testCases.id, defect.caseId),
+        columns: { id: true, title: true },
+      })
+    : null;
+
+  return NextResponse.json({ ...defect, attachments: [], case: relatedCase || null }, { status: 201 });
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { defects } from "@/db/schema";
+import { defects, testCases } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
 import { eq } from "drizzle-orm";
 
@@ -17,11 +17,23 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       description: body.description,
       severity: body.severity,
       status: body.status,
+      caseId: "caseId" in body ? body.caseId || null : undefined,
+      stepsToReproduce: body.stepsToReproduce ? JSON.stringify(body.stepsToReproduce) : undefined,
+      module: "module" in body ? body.module || null : undefined,
+      environment: "environment" in body ? body.environment || null : undefined,
+      detectedAt: "detectedAt" in body ? body.detectedAt || null : undefined,
     })
     .where(eq(defects.id, id))
     .returning();
 
-  return NextResponse.json(updated);
+  const relatedCase = updated.caseId
+    ? await db.query.testCases.findFirst({
+        where: eq(testCases.id, updated.caseId),
+        columns: { id: true, title: true },
+      })
+    : null;
+
+  return NextResponse.json({ ...updated, case: relatedCase || null });
 }
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {

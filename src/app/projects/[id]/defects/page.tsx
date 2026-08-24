@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { defects } from "@/db/schema";
+import { defects, testSuites } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import DefectsList from "@/components/DefectsList";
 
@@ -8,7 +8,7 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
   const all = await db.query.defects.findMany({
     where: eq(defects.projectId, id),
     orderBy: (d, { desc }) => [desc(d.createdAt)],
-    with: { attachments: true },
+    with: { attachments: true, case: { columns: { id: true, title: true } } },
   });
   const initialDefects = all.map((d) => ({
     ...d,
@@ -18,5 +18,21 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
       url: `data:${a.mimeType};base64,${a.data}`,
     })),
   }));
-  return <DefectsList projectId={id} initialDefects={initialDefects} />;
+
+  const suites = await db.query.testSuites.findMany({
+    where: eq(testSuites.projectId, id),
+    columns: { id: true },
+  });
+  const cases = suites.length
+    ? await db.query.testCases.findMany({
+        where: (tc, { inArray }) =>
+          inArray(
+            tc.suiteId,
+            suites.map((s) => s.id)
+          ),
+        columns: { id: true, title: true },
+      })
+    : [];
+
+  return <DefectsList projectId={id} initialDefects={initialDefects} cases={cases} />;
 }

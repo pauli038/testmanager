@@ -247,8 +247,14 @@ export const defects = pgTable("defects", {
   runCaseId: text("run_case_id").references(() => testRunCases.id, {
     onDelete: "set null",
   }),
+  caseId: text("case_id").references(() => testCases.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description"),
+  // steps to reproduce, stored as JSON string: string[]
+  stepsToReproduce: text("steps_to_reproduce").notNull().default("[]"),
+  module: text("module"),
+  environment: text("environment"),
+  detectedAt: text("detected_at"),
   severity: text("severity", { enum: ["low", "medium", "high", "critical"] })
     .notNull()
     .default("medium"),
@@ -267,6 +273,10 @@ export const defectsRelations = relations(defects, ({ one, many }) => ({
   runCase: one(testRunCases, {
     fields: [defects.runCaseId],
     references: [testRunCases.id],
+  }),
+  case: one(testCases, {
+    fields: [defects.caseId],
+    references: [testCases.id],
   }),
   attachments: many(attachments),
 }));

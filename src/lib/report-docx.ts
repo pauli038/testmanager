@@ -11,6 +11,19 @@ import {
 } from "docx";
 import type { ReportData } from "./report-data";
 
+// Splits on "\n" so multi-line values (e.g. numbered steps) render as
+// separate lines instead of running together — a plain Paragraph(string)
+// ignores literal newlines.
+function valueParagraph(value: string | number): Paragraph {
+  const lines = String(value).split("\n");
+  const children: TextRun[] = [];
+  lines.forEach((line, i) => {
+    if (i > 0) children.push(new TextRun({ text: "", break: 1 }));
+    children.push(new TextRun({ text: line }));
+  });
+  return new Paragraph({ children });
+}
+
 function statsTable(rows: { label: string; value: string | number }[]): Table {
   const headerRow = new TableRow({
     tableHeader: true,
@@ -37,7 +50,7 @@ function statsTable(rows: { label: string; value: string | number }[]): Table {
       new TableRow({
         children: [
           new TableCell({ children: [new Paragraph(r.label)] }),
-          new TableCell({ children: [new Paragraph(String(r.value))] }),
+          new TableCell({ children: [valueParagraph(r.value)] }),
         ],
       })
   );
