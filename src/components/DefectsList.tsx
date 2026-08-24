@@ -4,7 +4,6 @@ import { useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 
 type CaseRef = { id: string; title: string };
-type Step = { step: string; expected: string };
 type Defect = {
   id: string;
   title: string;
@@ -51,13 +50,11 @@ function toLocalDateStr(iso: string) {
   ).padStart(2, "0")}`;
 }
 
-// Normalizes older records saved as string[] (before "resultado esperado" existed).
-function parseSteps(raw: string): Step[] {
+// Normalizes older records briefly saved as {step, expected} pairs.
+function parseSteps(raw: string): string[] {
   if (!raw) return [];
   const parsed = JSON.parse(raw);
-  return parsed.map((s: string | Step) =>
-    typeof s === "string" ? { step: s, expected: "" } : s
-  );
+  return parsed.map((s: string | { step: string }) => (typeof s === "string" ? s : s.step));
 }
 
 export default function DefectsList({
@@ -79,7 +76,7 @@ export default function DefectsList({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
-  const [steps, setSteps] = useState<Step[]>([{ step: "", expected: "" }]);
+  const [steps, setSteps] = useState<string[]>([""]);
   const [caseId, setCaseId] = useState("");
   const [moduleField, setModuleField] = useState("");
   const [environment, setEnvironment] = useState("");
@@ -93,7 +90,7 @@ export default function DefectsList({
     setTitle("");
     setDescription("");
     setSeverity("medium");
-    setSteps([{ step: "", expected: "" }]);
+    setSteps([""]);
     setCaseId("");
     setModuleField("");
     setEnvironment("");
@@ -107,7 +104,7 @@ export default function DefectsList({
     setDescription(d.description || "");
     setSeverity(d.severity);
     const parsedSteps = parseSteps(d.stepsToReproduce);
-    setSteps(parsedSteps.length ? parsedSteps : [{ step: "", expected: "" }]);
+    setSteps(parsedSteps.length ? parsedSteps : [""]);
     setCaseId(d.caseId || "");
     setModuleField(d.module || "");
     setEnvironment(d.environment || "");
@@ -119,12 +116,12 @@ export default function DefectsList({
     setViewingDefect(d);
   }
 
-  function updateStep(idx: number, field: keyof Step, value: string) {
-    setSteps((s) => s.map((st, i) => (i === idx ? { ...st, [field]: value } : st)));
+  function updateStep(idx: number, value: string) {
+    setSteps((s) => s.map((st, i) => (i === idx ? value : st)));
   }
 
   function addStep() {
-    setSteps((s) => [...s, { step: "", expected: "" }]);
+    setSteps((s) => [...s, ""]);
   }
 
   function removeStep(idx: number) {
@@ -137,9 +134,7 @@ export default function DefectsList({
       title,
       description,
       severity,
-      stepsToReproduce: steps
-        .map((s) => ({ step: s.step.trim(), expected: s.expected.trim() }))
-        .filter((s) => s.step || s.expected),
+      stepsToReproduce: steps.map((s) => s.trim()).filter(Boolean),
       caseId: caseId || null,
       module: moduleField || null,
       environment: environment || null,
@@ -300,30 +295,36 @@ export default function DefectsList({
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 flex-wrap mt-2">
-                  {d.attachments.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setViewingImage(a)}
-                      className="block w-12 h-12 rounded border border-slate-200 overflow-hidden"
+                <div className="mt-3">
+                  <p className="text-xs text-slate-400 mb-1.5">Evidencia</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {d.attachments.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setViewingImage(a)}
+                        className="block w-14 h-14 rounded-lg border border-slate-200 overflow-hidden shrink-0"
+                      >
+                        <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                    <label
+                      title="Subir evidencia"
+                      className="flex items-center justify-center w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
                     >
-                      <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                  <label className="text-xs text-teal-600 cursor-pointer hover:underline">
-                    📸 Subir evidencia
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadEvidence(d.id, file);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
+                      <span className="text-xl leading-none">+</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) uploadEvidence(d.id, file);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -409,16 +410,9 @@ export default function DefectsList({
                     <div key={i} className="flex gap-2 items-start">
                       <span className="text-xs text-slate-400 mt-2 w-4">{i + 1}.</span>
                       <textarea
-                        placeholder="Paso"
-                        value={s.step}
-                        onChange={(e) => updateStep(i, "step", e.target.value)}
-                        rows={1}
-                        className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
-                      />
-                      <textarea
-                        placeholder="Resultado esperado"
-                        value={s.expected}
-                        onChange={(e) => updateStep(i, "expected", e.target.value)}
+                        placeholder="Descripción"
+                        value={s}
+                        onChange={(e) => updateStep(i, e.target.value)}
                         rows={1}
                         className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       />
@@ -555,27 +549,13 @@ export default function DefectsList({
                     <h3 className="text-sm font-medium text-slate-700 mb-2">
                       Pasos a reproducir
                     </h3>
-                    <div className="space-y-2">
+                    <ol className="list-decimal list-inside space-y-1">
                       {parsedSteps.map((s, i) => (
-                        <div
-                          key={i}
-                          className="flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-lg p-3"
-                        >
-                          <span className="text-xs text-slate-400 mt-0.5 w-4">{i + 1}.</span>
-                          <div className="flex-1">
-                            <p className="text-sm text-slate-800 whitespace-pre-wrap">{s.step}</p>
-                          </div>
-                          {s.expected && (
-                            <div className="flex-1">
-                              <p className="text-xs text-slate-400 mb-0.5">Resultado esperado</p>
-                              <p className="text-sm text-slate-600 whitespace-pre-wrap">
-                                {s.expected}
-                              </p>
-                            </div>
-                          )}
-                        </div>
+                        <li key={i} className="text-sm text-slate-600">
+                          {s}
+                        </li>
                       ))}
-                    </div>
+                    </ol>
                   </div>
                 )
               );

@@ -218,10 +218,10 @@ export async function getDefectsReportData(projectId: string, date?: string): Pr
       });
 
   const sections = rows.map((d) => {
-    const rawSteps: Array<string | { step: string; expected: string }> = d.stepsToReproduce
+    const rawSteps: Array<string | { step: string }> = d.stepsToReproduce
       ? JSON.parse(d.stepsToReproduce)
       : [];
-    const steps = rawSteps.map((s) => (typeof s === "string" ? { step: s, expected: "" } : s));
+    const steps = rawSteps.map((s) => (typeof s === "string" ? s : s.step));
     return {
       heading: d.title,
       rows: [
@@ -234,14 +234,7 @@ export async function getDefectsReportData(projectId: string, date?: string): Pr
         { label: "Descripción", value: d.description || "—" },
         {
           label: "Pasos a reproducir",
-          value: steps.length
-            ? steps
-                .map(
-                  (s, i) =>
-                    `${i + 1}. ${s.step}` + (s.expected ? ` → Esperado: ${s.expected}` : "")
-                )
-                .join("\n")
-            : "—",
+          value: steps.length ? steps.map((s, i) => `${i + 1}. ${s}`).join("\n") : "—",
         },
       ],
     };
