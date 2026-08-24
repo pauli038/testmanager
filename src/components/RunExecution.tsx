@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 
 const MAX_VIDEO_SECONDS = 60;
+// Above this size, upload in chunks instead of one request — some proxies
+// (e.g. VS Code Dev Tunnels) reject large single-request bodies with a 413.
+const CHUNK_THRESHOLD_BYTES = 4 * 1024 * 1024; // 4MB
+const CHUNK_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
 function getVideoDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -99,6 +103,29 @@ export default function RunExecution({
     });
   }
 
+  // Shared by both upload paths: reads a fetch Response, and on failure
+  // extracts a server error message (falling back to the raw status when the
+  // body isn't JSON — e.g. a proxy's own error page).
+  async function readUploadResult(
+    runCaseId: string,
+    res: Response
+  ): Promise<{ id: string; filename: string; url: string } | null> {
+    if (res.ok) return res.json();
+    const rawText = await res.text().catch(() => "");
+    console.error("Evidence upload failed:", res.status, rawText);
+    let serverMessage: string | undefined;
+    try {
+      serverMessage = JSON.parse(rawText)?.error;
+    } catch {
+      // non-JSON error body (e.g. a proxy/platform error page) — fall through
+    }
+    setUploadError({
+      runCaseId,
+      message: serverMessage || `No se pudo subir el archivo (HTTP ${res.status}).`,
+    });
+    return null;
+  }
+
   async function uploadEvidence(runCaseId: string, file: File) {
     setUploadError(null);
     if (file.type.startsWith("video/")) {
@@ -117,14 +144,12 @@ export default function RunExecution({
       }
     }
 
-    const fd = new FormData();
-    fd.append("file", file);
-    let res: Response;
+    let attachment: { id: string; filename: string; url: string } | null;
     try {
-      res = await fetch(`/api/run-cases/${runCaseId}/attachments`, {
-        method: "POST",
-        body: fd,
-      });
+      attachment =
+        file.size > CHUNK_THRESHOLD_BYTES
+          ? await uploadInChunks(runCaseId, file)
+          : await uploadWhole(runCaseId, file);
     } catch (err) {
       console.error("Evidence upload network error:", err);
       setUploadError({
@@ -134,28 +159,54 @@ export default function RunExecution({
       return;
     }
 
-    if (res.ok) {
-      const attachment = await res.json();
+    if (attachment) {
       setRunCases((rc) =>
         rc.map((c) =>
-          c.id === runCaseId ? { ...c, attachments: [...c.attachments, attachment] } : c
+          c.id === runCaseId ? { ...c, attachments: [...c.attachments, attachment!] } : c
         )
       );
-      return;
     }
+  }
 
-    const rawText = await res.text().catch(() => "");
-    console.error("Evidence upload failed:", res.status, rawText);
-    let serverMessage: string | undefined;
-    try {
-      serverMessage = JSON.parse(rawText)?.error;
-    } catch {
-      // non-JSON error body (e.g. a proxy/platform error page) — fall through
-    }
-    setUploadError({
-      runCaseId,
-      message: serverMessage || `No se pudo subir el archivo (HTTP ${res.status}).`,
+  async function uploadWhole(runCaseId: string, file: File) {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`/api/run-cases/${runCaseId}/attachments`, {
+      method: "POST",
+      body: fd,
     });
+    return readUploadResult(runCaseId, res);
+  }
+
+  // Splits large files into small requests so proxies/tunnels that reject big
+  // request bodies (413) never see more than CHUNK_SIZE_BYTES at once.
+  async function uploadInChunks(runCaseId: string, file: File) {
+    const uploadId = crypto.randomUUID();
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE_BYTES);
+
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = file.slice(i * CHUNK_SIZE_BYTES, (i + 1) * CHUNK_SIZE_BYTES);
+      const fd = new FormData();
+      fd.append("chunk", chunk);
+      fd.append("uploadId", uploadId);
+      fd.append("chunkIndex", String(i));
+      fd.append("totalChunks", String(totalChunks));
+      fd.append("filename", file.name);
+      fd.append("mimeType", file.type);
+
+      const res = await fetch(`/api/run-cases/${runCaseId}/attachments/chunk`, {
+        method: "POST",
+        body: fd,
+      });
+
+      if (i === totalChunks - 1) {
+        return readUploadResult(runCaseId, res);
+      }
+      if (!res.ok) {
+        return readUploadResult(runCaseId, res);
+      }
+    }
+    return null;
   }
 
   async function removeAttachment(runCaseId: string, attachmentId: string) {
