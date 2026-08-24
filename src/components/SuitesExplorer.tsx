@@ -17,6 +17,7 @@ type TestCase = {
   tags: string;
   automated: boolean;
   automationId: string | null;
+  lastStatus?: string | null;
 };
 
 const priorityColors: Record<string, string> = {
@@ -24,6 +25,13 @@ const priorityColors: Record<string, string> = {
   medium: "bg-blue-100 text-blue-700",
   high: "bg-orange-100 text-orange-700",
   critical: "bg-red-100 text-red-700",
+};
+
+const lastStatusConfig: Record<string, { icon: string; classes: string; label: string }> = {
+  passed: { icon: "✅", classes: "bg-emerald-100 text-emerald-700", label: "Aprobado" },
+  failed: { icon: "❌", classes: "bg-red-100 text-red-700", label: "Fallido" },
+  blocked: { icon: "🚫", classes: "bg-orange-100 text-orange-700", label: "Bloqueado" },
+  skipped: { icon: "⏭️", classes: "bg-slate-100 text-slate-500", label: "Omitido" },
 };
 
 export default function SuitesExplorer({
@@ -105,7 +113,7 @@ export default function SuitesExplorer({
         ...c,
         [suiteId]: isNew
           ? [...list, testCase]
-          : list.map((x) => (x.id === testCase.id ? testCase : x)),
+          : list.map((x) => (x.id === testCase.id ? { ...x, ...testCase } : x)),
       };
     });
     setShowCaseModal(false);
@@ -181,7 +189,13 @@ export default function SuitesExplorer({
               {currentCases.map((c) => (
                 <div
                   key={c.id}
-                  className="bg-white border border-slate-200 rounded-lg p-4 hover:border-teal-300"
+                  className={`bg-white border rounded-lg p-4 hover:border-teal-300 ${
+                    c.lastStatus === "passed"
+                      ? "border-l-4 border-l-emerald-500 border-slate-200"
+                      : c.lastStatus === "failed"
+                      ? "border-l-4 border-l-red-500 border-slate-200"
+                      : "border-slate-200"
+                  }`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -192,6 +206,13 @@ export default function SuitesExplorer({
                         {c.automated && (
                           <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
                             🤖 automatizado
+                          </span>
+                        )}
+                        {c.lastStatus && lastStatusConfig[c.lastStatus] && (
+                          <span
+                            className={`text-xs rounded px-1.5 py-0.5 ${lastStatusConfig[c.lastStatus].classes}`}
+                          >
+                            {lastStatusConfig[c.lastStatus].icon} {lastStatusConfig[c.lastStatus].label}
                           </span>
                         )}
                       </div>
@@ -324,11 +345,22 @@ function ViewCaseModal({
       <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
         <div className="flex items-start justify-between mb-4">
           <h2 className="text-lg font-semibold text-slate-900">{testCase.title}</h2>
-          {testCase.automated && (
-            <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 whitespace-nowrap ml-2">
-              🤖 automatizado
-            </span>
-          )}
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            {testCase.automated && (
+              <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 whitespace-nowrap">
+                🤖 automatizado
+              </span>
+            )}
+            {testCase.lastStatus && lastStatusConfig[testCase.lastStatus] && (
+              <span
+                className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap ${
+                  lastStatusConfig[testCase.lastStatus].classes
+                }`}
+              >
+                {lastStatusConfig[testCase.lastStatus].icon} {lastStatusConfig[testCase.lastStatus].label}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2 mb-4">
