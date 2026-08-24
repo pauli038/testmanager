@@ -1,6 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ConfirmModal from "./ConfirmModal";
+
+const MAX_VIDEO_SECONDS = 60;
+
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(video.src);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error("No se pudo leer el video"));
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
 
 type Step = { step: string; expected: string };
 type RunCase = {
@@ -36,27 +55,35 @@ export default function RunExecution({
   projectId: string;
   runId: string;
 }) {
-  const [run, setRun] = useState<any>(null);
+  const [run, setRun] = useState<{ id: string; name: string } | null>(null);
   const [runCases, setRunCases] = useState<RunCase[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  async function load() {
-    const res = await fetch(`/api/runs/${runId}`);
-    const data = await res.json();
-    setRun(data.run);
-    setRunCases(data.runCases);
-    setLoading(false);
-  }
+  const [uploadError, setUploadError] = useState<{ runCaseId: string; message: string } | null>(
+    null
+  );
+  const [pendingDeleteAttachment, setPendingDeleteAttachment] = useState<{
+    runCaseId: string;
+    attachmentId: string;
+  } | null>(null);
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    fetch(`/api/runs/${runId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        setRun(data.run);
+        setRunCases(data.runCases);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [runId]);
 
-  async function setStatus(runCaseId: string, status: string) {
-    setRunCases((rc) =>
-      rc.map((c) => (c.id === runCaseId ? { ...c, status: status as any } : c))
-    );
+  async function setStatus(runCaseId: string, status: RunCase["status"]) {
+    setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, status } : c)));
     await fetch(`/api/run-cases/${runCaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -73,6 +100,23 @@ export default function RunExecution({
   }
 
   async function uploadEvidence(runCaseId: string, file: File) {
+    setUploadError(null);
+    if (file.type.startsWith("video/")) {
+      try {
+        const duration = await getVideoDuration(file);
+        if (duration > MAX_VIDEO_SECONDS) {
+          setUploadError({
+            runCaseId,
+            message: `El video dura ${Math.round(duration)}s — el máximo permitido es ${MAX_VIDEO_SECONDS}s.`,
+          });
+          return;
+        }
+      } catch {
+        setUploadError({ runCaseId, message: "No se pudo leer la duración del video." });
+        return;
+      }
+    }
+
     const fd = new FormData();
     fd.append("file", file);
     const res = await fetch(`/api/run-cases/${runCaseId}/attachments`, {
@@ -86,7 +130,22 @@ export default function RunExecution({
           c.id === runCaseId ? { ...c, attachments: [...c.attachments, attachment] } : c
         )
       );
+    } else {
+      const body = await res.json().catch(() => null);
+      setUploadError({ runCaseId, message: body?.error || "No se pudo subir el archivo." });
     }
+  }
+
+  async function removeAttachment(runCaseId: string, attachmentId: string) {
+    await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
+    setRunCases((rc) =>
+      rc.map((c) =>
+        c.id === runCaseId
+          ? { ...c, attachments: c.attachments.filter((a) => a.id !== attachmentId) }
+          : c
+      )
+    );
+    setPendingDeleteAttachment(null);
   }
 
   async function createDefect(runCaseId: string, caseTitle: string) {
@@ -228,32 +287,65 @@ export default function RunExecution({
                     />
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 mb-1">Evidencia</p>
+                    {uploadError?.runCaseId === c.id && (
+                      <p className="text-xs text-red-600 mb-1.5">{uploadError.message}</p>
+                    )}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {c.attachments.map((a) => (
-                        <a
-                          key={a.id}
-                          href={a.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block w-16 h-16 rounded border border-slate-200 overflow-hidden"
-                        >
-                          <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                        </a>
-                      ))}
-                      <label className="text-xs text-teal-600 cursor-pointer hover:underline">
-                        📸 Subir evidencia
+                      {c.attachments.map((a) => {
+                        const isVideo = a.url.startsWith("data:video/");
+                        return (
+                          <div key={a.id} className="relative group w-16 h-16 shrink-0">
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block w-full h-full rounded-lg border border-slate-200 overflow-hidden"
+                            >
+                              {isVideo ? (
+                                <video src={a.url} className="w-full h-full object-cover" muted />
+                              ) : (
+                                <img
+                                  src={a.url}
+                                  alt={a.filename}
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPendingDeleteAttachment({ runCaseId: c.id, attachmentId: a.id })
+                              }
+                              title="Eliminar evidencia"
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-700 text-white text-xs leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        );
+                      })}
+                      <label
+                        title="Subir evidencia (imagen o video, máx. 60s)"
+                        className="flex items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
+                      >
+                        <span className="text-xl leading-none">+</span>
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,video/*"
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file) uploadEvidence(c.id, file);
+                            e.target.value = "";
                           }}
                         />
                       </label>
                     </div>
+                  </div>
+
+                  <div className="flex items-center justify-end">
                     <button
                       onClick={() => createDefect(c.id, c.caseTitle)}
                       className="text-xs text-red-600 hover:underline"
@@ -286,6 +378,16 @@ export default function RunExecution({
           );
         })}
       </div>
+
+      <ConfirmModal
+        open={pendingDeleteAttachment !== null}
+        message="¿Eliminar esta evidencia?"
+        onConfirm={() =>
+          pendingDeleteAttachment &&
+          removeAttachment(pendingDeleteAttachment.runCaseId, pendingDeleteAttachment.attachmentId)
+        }
+        onCancel={() => setPendingDeleteAttachment(null)}
+      />
     </div>
   );
 }

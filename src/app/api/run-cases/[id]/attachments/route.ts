@@ -3,7 +3,10 @@ import { db } from "@/db";
 import { attachments } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
 
-const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — evidence is stored inline in the database
+// Evidence is stored inline in the database (base64), so limits stay modest —
+// videos are capped at 60s client-side, which keeps them well under this size.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024; // 30MB
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { error } = await requireUser();
@@ -13,9 +16,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
-  if (file.size > MAX_SIZE_BYTES) {
+  const isVideo = (file.type || "").startsWith("video/");
+  const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (file.size > maxBytes) {
     return NextResponse.json(
-      { error: "El archivo es muy grande (máximo 5MB)" },
+      { error: `El archivo es muy grande (máximo ${isVideo ? "30MB" : "5MB"})` },
       { status: 413 }
     );
   }
