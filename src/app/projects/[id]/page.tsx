@@ -38,7 +38,7 @@ export default async function ProjectDashboard(props: { params: Promise<{ id: st
           blocked: 0,
           skipped: 0,
         };
-        for (const row of rows) stats[row.status] = row.count;
+        for (const row of rows) stats[row.status] = Number(row.count);
         const total = Object.values(stats).reduce((a, b) => a + b, 0);
         return {
           name: r.name.length > 18 ? r.name.slice(0, 18) + "…" : r.name,
@@ -68,7 +68,7 @@ export default async function ProjectDashboard(props: { params: Promise<{ id: st
     blocked: 0,
     skipped: 0,
   };
-  for (const row of overallRows) overallStats[row.status] = row.count;
+  for (const row of overallRows) overallStats[row.status] = Number(row.count);
 
   const defectRows = await db
     .select({ status: defects.status, count: sql<number>`count(*)` })
@@ -76,11 +76,11 @@ export default async function ProjectDashboard(props: { params: Promise<{ id: st
     .where(eq(defects.projectId, id))
     .groupBy(defects.status);
   const defectStats: Record<string, number> = { open: 0, in_progress: 0, closed: 0 };
-  for (const row of defectRows) defectStats[row.status] = row.count;
+  for (const row of defectRows) defectStats[row.status] = Number(row.count);
 
   return (
     <DashboardCharts
-      totalCases={caseCountRes[0]?.count ?? 0}
+      totalCases={Number(caseCountRes[0]?.count ?? 0)}
       totalRuns={runs.length}
       overallStats={overallStats}
       runTrend={runTrend}

@@ -29,8 +29,8 @@ export default async function HomePage() {
 
       return {
         projectId: p.id,
-        cases: caseCount[0]?.count ?? 0,
-        runs: runCount[0]?.count ?? 0,
+        cases: Number(caseCount[0]?.count ?? 0),
+        runs: Number(runCount[0]?.count ?? 0),
       };
     })
   );

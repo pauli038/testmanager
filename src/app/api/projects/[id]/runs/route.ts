@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         blocked: 0,
         skipped: 0,
       };
-      for (const row of rows) stats[row.status] = row.count;
+      for (const row of rows) stats[row.status] = Number(row.count);
       const total = Object.values(stats).reduce((a, b) => a + b, 0);
       return { ...r, stats, total };
     })
