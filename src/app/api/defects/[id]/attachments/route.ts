@@ -20,23 +20,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const base64 = buffer.toString("base64");
   const mimeType = file.type || "image/png";
 
-  const [attachment] = await db
-    .insert(attachments)
-    .values({
-      defectId: id,
-      filename: file.name,
-      data: base64,
-      mimeType,
-    })
-    .returning();
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const base64 = buffer.toString("base64");
 
-  return NextResponse.json({
-    id: attachment.id,
-    filename: attachment.filename,
-    url: `data:${mimeType};base64,${base64}`,
-  }, { status: 201 });
+    const [attachment] = await db
+      .insert(attachments)
+      .values({
+        defectId: id,
+        filename: file.name,
+        data: base64,
+        mimeType,
+      })
+      .returning();
+
+    return NextResponse.json(
+      {
+        id: attachment.id,
+        filename: attachment.filename,
+        url: `data:${mimeType};base64,${base64}`,
+      },
+      { status: 201 }
+    );
+  } catch (err) {
+    console.error("Failed to save attachment:", err);
+    return NextResponse.json({ error: "No se pudo guardar el archivo en la base de datos" }, { status: 500 });
+  }
 }

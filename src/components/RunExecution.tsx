@@ -119,10 +119,21 @@ export default function RunExecution({
 
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch(`/api/run-cases/${runCaseId}/attachments`, {
-      method: "POST",
-      body: fd,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`/api/run-cases/${runCaseId}/attachments`, {
+        method: "POST",
+        body: fd,
+      });
+    } catch (err) {
+      console.error("Evidence upload network error:", err);
+      setUploadError({
+        runCaseId,
+        message: "No se pudo conectar con el servidor para subir el archivo.",
+      });
+      return;
+    }
+
     if (res.ok) {
       const attachment = await res.json();
       setRunCases((rc) =>
@@ -130,10 +141,21 @@ export default function RunExecution({
           c.id === runCaseId ? { ...c, attachments: [...c.attachments, attachment] } : c
         )
       );
-    } else {
-      const body = await res.json().catch(() => null);
-      setUploadError({ runCaseId, message: body?.error || "No se pudo subir el archivo." });
+      return;
     }
+
+    const rawText = await res.text().catch(() => "");
+    console.error("Evidence upload failed:", res.status, rawText);
+    let serverMessage: string | undefined;
+    try {
+      serverMessage = JSON.parse(rawText)?.error;
+    } catch {
+      // non-JSON error body (e.g. a proxy/platform error page) — fall through
+    }
+    setUploadError({
+      runCaseId,
+      message: serverMessage || `No se pudo subir el archivo (HTTP ${res.status}).`,
+    });
   }
 
   async function removeAttachment(runCaseId: string, attachmentId: string) {
