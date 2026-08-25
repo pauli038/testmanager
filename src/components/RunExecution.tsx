@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
+import ReportDefectModal from "./ReportDefectModal";
 
 const MAX_VIDEO_SECONDS = 60;
 // Above this size, upload in chunks instead of one request — some proxies
@@ -70,6 +71,11 @@ export default function RunExecution({
     runCaseId: string;
     attachmentId: string;
   } | null>(null);
+  const [pendingDefect, setPendingDefect] = useState<{
+    runCaseId: string;
+    caseTitle: string;
+  } | null>(null);
+  const [reportingDefect, setReportingDefect] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,21 +227,27 @@ export default function RunExecution({
     setPendingDeleteAttachment(null);
   }
 
-  async function createDefect(runCaseId: string, caseTitle: string) {
-    const title = prompt(`Título del defecto para "${caseTitle}":`);
-    if (!title) return;
-    const res = await fetch(`/api/projects/${projectId}/defects`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, runCaseId, severity: "high" }),
-    });
-    if (res.ok) {
-      const defect = await res.json();
-      setRunCases((rc) =>
-        rc.map((c) =>
-          c.id === runCaseId ? { ...c, defects: [...c.defects, defect] } : c
-        )
-      );
+  async function createDefect(title: string, severity: string) {
+    if (!pendingDefect) return;
+    const { runCaseId } = pendingDefect;
+    setReportingDefect(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/defects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, runCaseId, severity }),
+      });
+      if (res.ok) {
+        const defect = await res.json();
+        setRunCases((rc) =>
+          rc.map((c) =>
+            c.id === runCaseId ? { ...c, defects: [...c.defects, defect] } : c
+          )
+        );
+        setPendingDefect(null);
+      }
+    } finally {
+      setReportingDefect(false);
     }
   }
 
@@ -420,7 +432,7 @@ export default function RunExecution({
 
                   <div className="flex items-center justify-end">
                     <button
-                      onClick={() => createDefect(c.id, c.caseTitle)}
+                      onClick={() => setPendingDefect({ runCaseId: c.id, caseTitle: c.caseTitle })}
                       className="text-xs text-red-600 hover:underline"
                     >
                       🐞 Reportar defecto
@@ -460,6 +472,14 @@ export default function RunExecution({
           removeAttachment(pendingDeleteAttachment.runCaseId, pendingDeleteAttachment.attachmentId)
         }
         onCancel={() => setPendingDeleteAttachment(null)}
+      />
+
+      <ReportDefectModal
+        open={pendingDefect !== null}
+        caseTitle={pendingDefect?.caseTitle || ""}
+        submitting={reportingDefect}
+        onConfirm={createDefect}
+        onCancel={() => setPendingDefect(null)}
       />
     </div>
   );
