@@ -32,12 +32,6 @@ export const projects = pgTable("projects", {
   id: id(),
   name: text("name").notNull(),
   description: text("description"),
-  status: text("status", {
-    enum: ["backlog", "analisis", "desarrollo", "code_review", "testing_qa", "uat", "done"],
-  })
-    .notNull()
-    .default("backlog"),
-  progress: integer("progress").notNull().default(0),
   createdBy: text("created_by").references(() => users.id),
   createdAt: createdAt(),
 });
@@ -53,6 +47,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   runs: many(testRuns),
   apiKeys: many(apiKeys),
   defects: many(defects),
+  caseKanbanColumns: many(caseKanbanColumns),
 }));
 
 // ---------- Project Members ----------
@@ -123,6 +118,9 @@ export const testCases = pgTable("test_cases", {
   tags: text("tags").notNull().default(""), // comma-separated
   automated: boolean("automated").notNull().default(false),
   automationId: text("automation_id"), // maps to playwright test title/id
+  // Key of a case_kanban_columns row (scoped to the project) tracking where
+  // the case sits in the QA cycle. Null means "unassigned" / first column.
+  phase: text("phase"),
   createdBy: text("created_by").references(() => users.id),
   createdAt: createdAt(),
 });
@@ -133,6 +131,29 @@ export const testCasesRelations = relations(testCases, ({ one, many }) => ({
     references: [testSuites.id],
   }),
   runCases: many(testRunCases),
+}));
+
+// ---------- Case Kanban Columns ----------
+// Per-project, user-editable phases representing the QA cycle (e.g.
+// Backlog, Diseño, En ejecución, Cerrado). testCases.phase stores the `key`
+// of one of these rows.
+export const caseKanbanColumns = pgTable("case_kanban_columns", {
+  id: id(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  color: text("color").notNull().default("slate"),
+  position: integer("position").notNull().default(0),
+  createdAt: createdAt(),
+});
+
+export const caseKanbanColumnsRelations = relations(caseKanbanColumns, ({ one }) => ({
+  project: one(projects, {
+    fields: [caseKanbanColumns.projectId],
+    references: [projects.id],
+  }),
 }));
 
 // ---------- Test Plans ----------

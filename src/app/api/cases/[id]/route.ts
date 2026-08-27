@@ -30,6 +30,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       tags: body.tags,
       automated: body.automated,
       automationId: body.automationId,
+      phase: body.phase,
     })
     .where(eq(testCases.id, id))
     .returning();

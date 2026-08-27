@@ -1,9 +1,17 @@
 import { db } from "@/db";
-import { testSuites, testCases, testRunCases } from "@/db/schema";
-import { eq, and, ne, inArray, desc } from "drizzle-orm";
-import SuitesExplorer from "@/components/SuitesExplorer";
+import { testSuites, testCases, testRunCases, caseKanbanColumns } from "@/db/schema";
+import { eq, and, ne, inArray, desc, asc } from "drizzle-orm";
+import CasesView from "@/components/CasesView";
 
 type CaseRow = typeof testCases.$inferSelect;
+
+const DEFAULT_COLUMNS = [
+  { key: "backlog", label: "Backlog", color: "slate" },
+  { key: "diseno", label: "Diseño", color: "blue" },
+  { key: "listo", label: "Listo para prueba", color: "amber" },
+  { key: "ejecucion", label: "En ejecución", color: "purple" },
+  { key: "cerrado", label: "Cerrado", color: "emerald" },
+];
 
 export default async function SuitesPage(props: {
   params: Promise<{ id: string }>;
@@ -45,7 +53,38 @@ export default async function SuitesPage(props: {
     }));
   }
 
+  let columns = await db.query.caseKanbanColumns.findMany({
+    where: eq(caseKanbanColumns.projectId, id),
+    orderBy: [asc(caseKanbanColumns.position)],
+  });
+  if (columns.length === 0) {
+    columns = await db
+      .insert(caseKanbanColumns)
+      .values(DEFAULT_COLUMNS.map((c, i) => ({ projectId: id, ...c, position: i })))
+      .returning();
+  }
+
+  const suiteNameById = Object.fromEntries(suites.map((s) => [s.id, s.name]));
+  const kanbanCases = Object.values(casesWithStatus)
+    .flat()
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      suiteId: c.suiteId,
+      suiteName: suiteNameById[c.suiteId] || "",
+      priority: c.priority,
+      automated: c.automated,
+      phase: c.phase,
+      lastStatus: c.lastStatus,
+    }));
+
   return (
-    <SuitesExplorer projectId={id} initialSuites={suites} initialCases={casesWithStatus} />
+    <CasesView
+      projectId={id}
+      initialSuites={suites}
+      initialCases={casesWithStatus}
+      initialColumns={columns}
+      initialKanbanCases={kanbanCases}
+    />
   );
 }
