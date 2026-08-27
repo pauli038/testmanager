@@ -36,6 +36,47 @@ const COLOR_DOT: Record<string, string> = {
 
 const COLOR_CHOICES = Object.keys(COLOR_DOT);
 
+function ColorPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (color: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`w-6 h-6 rounded-full border border-slate-300 ${COLOR_DOT[value] || "bg-slate-400"}`}
+        title="Elegir color"
+      />
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 mt-1 z-20 bg-white border border-slate-200 rounded-lg shadow-lg p-2 grid grid-cols-5 gap-1.5 w-36">
+            {COLOR_CHOICES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  onChange(c);
+                  setOpen(false);
+                }}
+                className={`w-5 h-5 rounded-full ${COLOR_DOT[c]} ${
+                  value === c ? "ring-2 ring-offset-1 ring-slate-400" : ""
+                }`}
+                title={c}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const priorityColors: Record<string, string> = {
   low: "bg-slate-100 text-slate-600",
   medium: "bg-blue-100 text-blue-700",
@@ -226,18 +267,7 @@ export default function CaseKanbanBoard({
                     ▼
                   </button>
                 </div>
-                <select
-                  value={col.color}
-                  onChange={(e) => recolorColumn(col.id, e.target.value)}
-                  className="border border-slate-200 rounded p-1"
-                >
-                  {COLOR_CHOICES.map((c) => (
-                    <option key={c} value={c}>
-                      ●
-                    </option>
-                  ))}
-                </select>
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${COLOR_DOT[col.color]}`} />
+                <ColorPicker value={col.color} onChange={(color) => recolorColumn(col.id, color)} />
                 <input
                   value={col.label}
                   onChange={(e) => renameColumn(col.id, e.target.value)}
@@ -253,17 +283,7 @@ export default function CaseKanbanBoard({
             ))}
           </div>
           <form onSubmit={addColumn} className="flex items-center gap-2 pt-3 border-t border-slate-100">
-            <select
-              value={newColumnColor}
-              onChange={(e) => setNewColumnColor(e.target.value)}
-              className="border border-slate-200 rounded p-1"
-            >
-              {COLOR_CHOICES.map((c) => (
-                <option key={c} value={c}>
-                  ●
-                </option>
-              ))}
-            </select>
+            <ColorPicker value={newColumnColor} onChange={setNewColumnColor} />
             <input
               value={newColumnLabel}
               onChange={(e) => setNewColumnLabel(e.target.value)}
