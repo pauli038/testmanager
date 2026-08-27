@@ -20,9 +20,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   const body = await req.json();
 
+  const updates: Partial<typeof projects.$inferInsert> = {};
+  if (body.name !== undefined) updates.name = body.name;
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.status !== undefined) updates.status = body.status;
+  if (body.progress !== undefined) updates.progress = body.progress;
+
   const [updated] = await db
     .update(projects)
-    .set({ name: body.name, description: body.description })
+    .set(updates)
     .where(eq(projects.id, id))
     .returning();
 

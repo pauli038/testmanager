@@ -1,2 +1,18 @@
 @import "tailwindcss";
 
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #projects-dashboard-print,
+  #projects-dashboard-print * {
+    visibility: visible;
+  }
+  #projects-dashboard-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
+

@@ -32,11 +32,21 @@ export const projects = pgTable("projects", {
   id: id(),
   name: text("name").notNull(),
   description: text("description"),
+  status: text("status", {
+    enum: ["backlog", "analisis", "desarrollo", "code_review", "testing_qa", "uat", "done"],
+  })
+    .notNull()
+    .default("backlog"),
+  progress: integer("progress").notNull().default(0),
   createdBy: text("created_by").references(() => users.id),
   createdAt: createdAt(),
 });
 
-export const projectsRelations = relations(projects, ({ many }) => ({
+export const projectsRelations = relations(projects, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [projects.createdBy],
+    references: [users.id],
+  }),
   members: many(projectMembers),
   suites: many(testSuites),
   plans: many(testPlans),
