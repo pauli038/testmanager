@@ -113,10 +113,9 @@ export default function CaseKanbanBoard({
   const [pendingDeleteColumn, setPendingDeleteColumn] = useState<KanbanColumn | null>(null);
   const [suiteFilter, setSuiteFilter] = useState("");
   const [automationFilter, setAutomationFilter] = useState<"" | "manual" | "automated">("");
-
-  function unassignedKeyIsFirst() {
-    return columns[0]?.key;
-  }
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
+  const [addTargetColumn, setAddTargetColumn] = useState("");
 
   const suiteOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -124,12 +123,56 @@ export default function CaseKanbanBoard({
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [cases]);
 
-  const visibleCases = cases.filter((c) => {
+  const matchesFilters = (c: KanbanCase) => {
     if (suiteFilter && c.suiteId !== suiteFilter) return false;
     if (automationFilter === "manual" && c.automated) return false;
     if (automationFilter === "automated" && !c.automated) return false;
     return true;
-  });
+  };
+
+  const visibleCases = cases.filter(matchesFilters);
+  const unassignedCases = cases.filter((c) => !c.phase && matchesFilters(c));
+
+  function toggleSelectedToAdd(id: string) {
+    setSelectedToAdd((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function openAddModal() {
+    setSelectedToAdd(new Set());
+    setAddTargetColumn(columns[0]?.key || "");
+    setAddModalOpen(true);
+  }
+
+  async function addSelectedToBoard() {
+    const targetColumn = addTargetColumn || columns[0]?.key;
+    if (!targetColumn || selectedToAdd.size === 0) return;
+    const ids = [...selectedToAdd];
+    setCases((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, phase: targetColumn } : c)));
+    setAddModalOpen(false);
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/cases/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phase: targetColumn }),
+        })
+      )
+    );
+  }
+
+  async function removeFromBoard(caseId: string) {
+    setCases((prev) => prev.map((c) => (c.id === caseId ? { ...c, phase: null } : c)));
+    await fetch(`/api/cases/${caseId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phase: null }),
+    });
+  }
 
   async function moveCase(caseId: string, phase: string) {
     setCases((prev) => prev.map((c) => (c.id === caseId ? { ...c, phase } : c)));
@@ -237,12 +280,20 @@ export default function CaseKanbanBoard({
             <option value="automated">Solo automatizado</option>
           </select>
         </div>
-        <button
-          onClick={() => setConfigOpen((v) => !v)}
-          className="text-sm font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
-        >
-          ⚙ {configOpen ? "Cerrar configuración" : "Configurar columnas"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openAddModal}
+            className="text-sm font-medium rounded-lg bg-teal-600 text-white px-3 py-1.5 hover:bg-teal-700"
+          >
+            + Agregar casos {unassignedCases.length > 0 && `(${unassignedCases.length})`}
+          </button>
+          <button
+            onClick={() => setConfigOpen((v) => !v)}
+            className="text-sm font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+          >
+            ⚙ {configOpen ? "Cerrar configuración" : "Configurar columnas"}
+          </button>
+        </div>
       </div>
 
       {configOpen && (
@@ -304,9 +355,7 @@ export default function CaseKanbanBoard({
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {columns.map((col) => {
-            const colCases = visibleCases.filter((c) =>
-              c.phase ? c.phase === col.key : col.key === unassignedKeyIsFirst()
-            );
+            const colCases = visibleCases.filter((c) => c.phase === col.key);
             return (
               <div
                 key={col.id}
@@ -337,9 +386,21 @@ export default function CaseKanbanBoard({
                       onDragStart={() => setDragId(c.id)}
                       onDragEnd={() => setDragId(null)}
                       onClick={() => router.push(`/projects/${projectId}/suites`)}
-                      className="bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:shadow-md hover:border-teal-300 transition"
+                      className="group bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:shadow-md hover:border-teal-300 transition"
                     >
-                      <h3 className="font-medium text-slate-900 text-sm leading-snug">{c.title}</h3>
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-medium text-slate-900 text-sm leading-snug">{c.title}</h3>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeFromBoard(c.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-600 text-xs shrink-0"
+                          title="Quitar del kanban"
+                        >
+                          ✕
+                        </button>
+                      </div>
                       <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
                           📁 {c.suiteName}
@@ -392,6 +453,75 @@ export default function CaseKanbanBoard({
               >
                 Eliminar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addModalOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
+            <h2 className="text-lg font-semibold text-slate-900 mb-1">Agregar casos al Kanban</h2>
+            <p className="text-sm text-slate-500 mb-4">
+              Elegí los casos que querés que aparezcan en el tablero.
+            </p>
+
+            {unassignedCases.length === 0 ? (
+              <p className="text-sm text-slate-400 py-6 text-center border border-dashed border-slate-300 rounded-xl">
+                {suiteFilter || automationFilter
+                  ? "No hay casos sin agregar que coincidan con el filtro actual."
+                  : "Todos los casos ya están en el tablero."}
+              </p>
+            ) : (
+              <div className="space-y-1 max-h-72 overflow-y-auto border border-slate-200 rounded-lg p-2 mb-4">
+                {unassignedCases.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 rounded cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedToAdd.has(c.id)}
+                      onChange={() => toggleSelectedToAdd(c.id)}
+                      className="accent-teal-600"
+                    />
+                    <span className="flex-1">{c.title}</span>
+                    <span className="text-xs text-slate-400 shrink-0">{c.suiteName}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-slate-600">Fase inicial</label>
+                <select
+                  value={addTargetColumn}
+                  onChange={(e) => setAddTargetColumn(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                >
+                  {columns.map((col) => (
+                    <option key={col.id} value={col.key}>
+                      {col.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAddModalOpen(false)}
+                  className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={addSelectedToBoard}
+                  disabled={selectedToAdd.size === 0}
+                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
+                >
+                  Agregar ({selectedToAdd.size})
+                </button>
+              </div>
             </div>
           </div>
         </div>
