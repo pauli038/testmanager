@@ -8,7 +8,7 @@ import {
   testCases,
   attachments,
 } from "@/db/schema";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { eq, and, or, inArray, isNull, sql } from "drizzle-orm";
 
 // Playwright integration endpoint.
 // Auth: header "x-api-key: tm_xxx" (create one in Project > Settings > API Keys)
@@ -92,17 +92,45 @@ export async function POST(req: NextRequest) {
 
   const created = [];
   for (const r of results) {
-    // Match by the full titlePath (recommended, set via automationId) or by
-    // the test's short title — some users paste the short title instead.
+    const normalizedTitle = (r.title || r.automationId || "").trim().toLowerCase();
+
+    // 1) Match by the full titlePath (recommended, set via automationId) or
+    // by the test's short title — some users paste the short title instead.
+    // Restricted to cases already marked automated, so a Playwright result
+    // never latches onto an unrelated manual case with the same text.
     let testCase = await db.query.testCases.findFirst({
       where: and(
         inArray(testCases.suiteId, projectSuiteIds),
+        eq(testCases.automated, true),
         or(
           eq(testCases.automationId, r.automationId),
           eq(testCases.automationId, r.title || r.automationId)
         )
       ),
     });
+
+    // 2) No case has that automationId yet — but if there's already an
+    // automated case with the same title sitting in its real suite (created
+    // by hand, automationId never filled in), reuse it instead of creating
+    // a duplicate in "Automatizado (Playwright)". Backfill its automationId
+    // so future runs match directly via automationId.
+    if (!testCase && normalizedTitle) {
+      const titleMatch = await db.query.testCases.findFirst({
+        where: and(
+          inArray(testCases.suiteId, projectSuiteIds),
+          eq(testCases.automated, true),
+          isNull(testCases.automationId),
+          sql`lower(trim(${testCases.title})) = ${normalizedTitle}`
+        ),
+      });
+      if (titleMatch) {
+        [testCase] = await db
+          .update(testCases)
+          .set({ automationId: r.automationId })
+          .where(eq(testCases.id, titleMatch.id))
+          .returning();
+      }
+    }
 
     if (!testCase) {
       [testCase] = await db
