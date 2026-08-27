@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export type KanbanColumn = {
@@ -70,10 +70,25 @@ export default function CaseKanbanBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [pendingDeleteColumn, setPendingDeleteColumn] = useState<KanbanColumn | null>(null);
+  const [suiteFilter, setSuiteFilter] = useState("");
+  const [automationFilter, setAutomationFilter] = useState<"" | "manual" | "automated">("");
 
   function unassignedKeyIsFirst() {
     return columns[0]?.key;
   }
+
+  const suiteOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of cases) map.set(c.suiteId, c.suiteName);
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [cases]);
+
+  const visibleCases = cases.filter((c) => {
+    if (suiteFilter && c.suiteId !== suiteFilter) return false;
+    if (automationFilter === "manual" && c.automated) return false;
+    if (automationFilter === "automated" && !c.automated) return false;
+    return true;
+  });
 
   async function moveCase(caseId: string, phase: string) {
     setCases((prev) => prev.map((c) => (c.id === caseId ? { ...c, phase } : c)));
@@ -157,7 +172,30 @@ export default function CaseKanbanBoard({
 
   return (
     <div>
-      <div className="flex items-center justify-end mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <select
+            value={suiteFilter}
+            onChange={(e) => setSuiteFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          >
+            <option value="">Todas las suites</option>
+            {suiteOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={automationFilter}
+            onChange={(e) => setAutomationFilter(e.target.value as "" | "manual" | "automated")}
+            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          >
+            <option value="">Manual y automatizado</option>
+            <option value="manual">Solo manual</option>
+            <option value="automated">Solo automatizado</option>
+          </select>
+        </div>
         <button
           onClick={() => setConfigOpen((v) => !v)}
           className="text-sm font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
@@ -246,7 +284,7 @@ export default function CaseKanbanBoard({
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {columns.map((col) => {
-            const colCases = cases.filter((c) =>
+            const colCases = visibleCases.filter((c) =>
               c.phase ? c.phase === col.key : col.key === unassignedKeyIsFirst()
             );
             return (
