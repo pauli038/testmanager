@@ -2,7 +2,12 @@ import { db } from "@/db";
 import { projects, testSuites, testCases, testRuns, testPlans, testRunCases, defects } from "@/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 
-export type ReportSection = { heading: string; rows: { label: string; value: string | number }[] };
+export type ReportImage = { filename: string; mimeType: string; base64: string };
+export type ReportSection = {
+  heading: string;
+  rows: { label: string; value: string | number }[];
+  images?: ReportImage[];
+};
 export type ReportData = { title: string; subtitle: string; sections: ReportSection[]; filenameBase: string };
 
 const severityLabels: Record<string, string> = {
@@ -202,6 +207,11 @@ export async function getGeneralReportData(projectId: string): Promise<ReportDat
 export async function getDefectsReportData(projectId: string, date?: string): Promise<ReportData> {
   const project = await getProjectOrThrow(projectId);
 
+  const attachmentsWith = {
+    case: { columns: { title: true } },
+    attachments: { columns: { filename: true, mimeType: true, data: true } },
+  } as const;
+
   const rows = date
     ? await db.query.defects.findMany({
         where: and(
@@ -209,12 +219,12 @@ export async function getDefectsReportData(projectId: string, date?: string): Pr
           sql`coalesce(${defects.detectedAt}, ${defects.createdAt})::date = ${date}::date`
         ),
         orderBy: (d, { desc }) => [desc(d.createdAt)],
-        with: { case: { columns: { title: true } } },
+        with: attachmentsWith,
       })
     : await db.query.defects.findMany({
         where: eq(defects.projectId, projectId),
         orderBy: (d, { desc }) => [desc(d.createdAt)],
-        with: { case: { columns: { title: true } } },
+        with: attachmentsWith,
       });
 
   const sections = rows.map((d) => {
@@ -222,8 +232,12 @@ export async function getDefectsReportData(projectId: string, date?: string): Pr
       ? JSON.parse(d.stepsToReproduce)
       : [];
     const steps = rawSteps.map((s) => (typeof s === "string" ? s : s.step));
+    const images = d.attachments
+      .filter((a) => a.mimeType === "image/png" || a.mimeType === "image/jpeg" || a.mimeType === "image/jpg")
+      .map((a) => ({ filename: a.filename, mimeType: a.mimeType, base64: a.data }));
     return {
       heading: d.title,
+      images: images.length ? images : undefined,
       rows: [
         { label: "Estado", value: defectStatusLabels[d.status] || d.status },
         { label: "Severidad", value: severityLabels[d.severity] || d.severity },

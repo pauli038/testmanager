@@ -10,6 +10,7 @@ const FONT_SIZE = 10;
 const COL_LABEL_WIDTH = 190;
 const TABLE_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const CELL_PADDING = 8;
+const MAX_IMG_HEIGHT = 320;
 
 const TEAL = rgb(0.02, 0.44, 0.42);
 const TEAL_LIGHT = rgb(0.91, 0.96, 0.95);
@@ -144,6 +145,33 @@ export async function buildReportPdf(data: ReportData): Promise<Uint8Array> {
       });
       y -= rowHeight;
     });
+
+    for (const img of section.images ?? []) {
+      try {
+        // A plain Buffer.from(base64, "base64") can be a view into Node's
+        // shared allocation pool with a non-zero byteOffset; pdf-lib's JPEG
+        // embedder reads via `.buffer` directly and ignores that offset,
+        // misreading the SOI marker. Copying into a fresh Uint8Array avoids it.
+        const bytes = new Uint8Array(Buffer.from(img.base64, "base64"));
+        const embedded = img.mimeType === "image/png" ? await pdfDoc.embedPng(bytes) : await pdfDoc.embedJpg(bytes);
+        const scale = Math.min(TABLE_WIDTH / embedded.width, MAX_IMG_HEIGHT / embedded.height, 1);
+        const w = embedded.width * scale;
+        const h = embedded.height * scale;
+
+        ensureSpace(h + LINE_HEIGHT + 10);
+        page.drawImage(embedded, { x: MARGIN, y: y - h, width: w, height: h });
+        y -= h + 4;
+
+        for (const line of wrapText(img.filename, font, 8, TABLE_WIDTH)) {
+          ensureSpace(10);
+          page.drawText(line, { x: MARGIN, y, size: 8, font, color: MUTED });
+          y -= 10;
+        }
+        y -= 6;
+      } catch (err) {
+        console.error("Failed to embed image in PDF report:", err);
+      }
+    }
 
     y -= 16;
   }
