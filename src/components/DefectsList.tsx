@@ -83,6 +83,7 @@ export default function DefectsList({
   const [detectedAt, setDetectedAt] = useState(todayStr());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState("");
+  const [reportDefectId, setReportDefectId] = useState("");
   const [downloading, setDownloading] = useState<"docx" | "pdf" | null>(null);
 
   function openNew() {
@@ -200,7 +201,12 @@ export default function DefectsList({
     setDownloading(format);
     try {
       const base = `/api/projects/${projectId}/reports/defects`;
-      const url = `${base}?format=${format}${dateFilter ? `&date=${dateFilter}` : ""}`;
+      const filterParam = reportDefectId
+        ? `&defectId=${reportDefectId}`
+        : dateFilter
+        ? `&date=${dateFilter}`
+        : "";
+      const url = `${base}?format=${format}${filterParam}`;
       const res = await fetch(url);
       if (!res.ok) return;
       const blob = await res.blob();
@@ -247,7 +253,20 @@ export default function DefectsList({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={reportDefectId}
+            onChange={(e) => setReportDefectId(e.target.value)}
+            title="Alcance del reporte de defectos"
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 max-w-[220px]"
+          >
+            <option value="">Todos los defectos</option>
+            {defects.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.title}
+              </option>
+            ))}
+          </select>
           <button
             onClick={() => downloadReport("docx")}
             disabled={downloading !== null}

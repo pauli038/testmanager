@@ -10,11 +10,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const { id } = await ctx.params;
   const { searchParams } = new URL(req.url);
   const date = searchParams.get("date") || undefined;
+  const defectId = searchParams.get("defectId") || undefined;
   const format = searchParams.get("format") === "pdf" ? "pdf" : "docx";
 
   let data;
   try {
-    data = await getDefectsReportData(id, date);
+    data = await getDefectsReportData(id, date, defectId);
   } catch {
     return NextResponse.json({ error: "Proyecto no encontrado" }, { status: 404 });
   }

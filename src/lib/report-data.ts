@@ -204,7 +204,11 @@ export async function getGeneralReportData(projectId: string): Promise<ReportDat
   };
 }
 
-export async function getDefectsReportData(projectId: string, date?: string): Promise<ReportData> {
+export async function getDefectsReportData(
+  projectId: string,
+  date?: string,
+  defectId?: string
+): Promise<ReportData> {
   const project = await getProjectOrThrow(projectId);
 
   const attachmentsWith = {
@@ -212,7 +216,13 @@ export async function getDefectsReportData(projectId: string, date?: string): Pr
     attachments: { columns: { filename: true, mimeType: true, data: true } },
   } as const;
 
-  const rows = date
+  const rows = defectId
+    ? await db.query.defects.findMany({
+        where: and(eq(defects.projectId, projectId), eq(defects.id, defectId)),
+        orderBy: (d, { desc }) => [desc(d.createdAt)],
+        with: attachmentsWith,
+      })
+    : date
     ? await db.query.defects.findMany({
         where: and(
           eq(defects.projectId, projectId),
@@ -255,13 +265,23 @@ export async function getDefectsReportData(projectId: string, date?: string): Pr
   });
 
   const safeName = project.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  const subtitle = defectId
+    ? `Defecto: ${rows[0]?.title || "—"} · Generado: ${new Date().toLocaleString("es-ES")}`
+    : date
+    ? `Fecha: ${date}`
+    : `Todos los defectos · Generado: ${new Date().toLocaleString("es-ES")}`;
+  const filenameBase = defectId
+    ? `reporte-defecto-${rows[0]?.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || defectId}`
+    : date
+    ? `reporte-defectos-${date}`
+    : `reporte-defectos-${safeName}`;
 
   return {
     title: `Reporte de defectos - ${project.name}`,
-    subtitle: date ? `Fecha: ${date}` : `Todos los defectos · Generado: ${new Date().toLocaleString("es-ES")}`,
+    subtitle,
     sections: sections.length
       ? sections
       : [{ heading: "Sin defectos", rows: [{ label: "Resultado", value: "No hay defectos que coincidan" }] }],
-    filenameBase: date ? `reporte-defectos-${date}` : `reporte-defectos-${safeName}`,
+    filenameBase,
   };
 }
