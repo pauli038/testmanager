@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "./ConfirmModal";
 import { CSV_TEMPLATE, parseCsv, rowsToCases } from "@/lib/csv";
@@ -39,10 +40,12 @@ export default function SuitesExplorer({
   projectId,
   initialSuites,
   initialCases,
+  headerActionsContainer,
 }: {
   projectId: string;
   initialSuites: Suite[];
   initialCases: Record<string, TestCase[]>;
+  headerActionsContainer?: HTMLDivElement | null;
 }) {
   const router = useRouter();
   const [suites, setSuites] = useState(initialSuites);
@@ -131,6 +134,23 @@ export default function SuitesExplorer({
 
   const currentCases = selectedSuite ? casesBySuite[selectedSuite] || [] : [];
 
+  const headerActions = selectedSuite && (
+    <>
+      <button
+        onClick={() => setShowImportModal(true)}
+        className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
+      >
+        ⬆️ Importar CSV
+      </button>
+      <button
+        onClick={openNewCase}
+        className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
+      >
+        + Nuevo caso
+      </button>
+    </>
+  );
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       <div className="lg:col-span-1">
@@ -181,6 +201,10 @@ export default function SuitesExplorer({
         </ul>
       </div>
 
+      {headerActionsContainer && headerActions
+        ? createPortal(headerActions, headerActionsContainer)
+        : null}
+
       <div className="lg:col-span-3">
         {selectedSuite ? (
           <>
@@ -188,20 +212,7 @@ export default function SuitesExplorer({
               <h3 className="text-sm font-medium text-slate-700">
                 Casos de prueba
               </h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowImportModal(true)}
-                  className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
-                >
-                  ⬆️ Importar CSV
-                </button>
-                <button
-                  onClick={openNewCase}
-                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
-                >
-                  + Nuevo caso
-                </button>
-              </div>
+              {!headerActionsContainer && <div className="flex gap-2">{headerActions}</div>}
             </div>
             <div className="space-y-2">
               {currentCases.map((c) => (

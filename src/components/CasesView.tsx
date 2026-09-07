@@ -33,10 +33,12 @@ export default function CasesView({
   initialKanbanCases: KanbanCase[];
 }) {
   const [view, setView] = useState<"suites" | "kanban">("suites");
+  const [headerActionsEl, setHeaderActionsEl] = useState<HTMLDivElement | null>(null);
 
   return (
     <div>
-      <div className="flex justify-end mb-4">
+      <div className="flex items-center justify-end gap-2 mb-4">
+        {view === "suites" && <div ref={setHeaderActionsEl} className="flex gap-2" />}
         <div className="flex rounded-lg border border-slate-200 overflow-hidden">
           <button
             onClick={() => setView("suites")}
@@ -58,7 +60,12 @@ export default function CasesView({
       </div>
 
       {view === "suites" ? (
-        <SuitesExplorer projectId={projectId} initialSuites={initialSuites} initialCases={initialCases} />
+        <SuitesExplorer
+          projectId={projectId}
+          initialSuites={initialSuites}
+          initialCases={initialCases}
+          headerActionsContainer={headerActionsEl}
+        />
       ) : (
         <CaseKanbanBoard
           projectId={projectId}
