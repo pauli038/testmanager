@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "./ConfirmModal";
+import { CSV_TEMPLATE, parseCsv, rowsToCases } from "@/lib/csv";
 
 type Suite = { id: string; name: string; description: string | null };
 type Step = { step: string; expected: string };
@@ -51,6 +52,7 @@ export default function SuitesExplorer({
   );
   const [newSuiteName, setNewSuiteName] = useState("");
   const [showCaseModal, setShowCaseModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [editingCase, setEditingCase] = useState<TestCase | null>(null);
   const [viewingCase, setViewingCase] = useState<TestCase | null>(null);
   const [pendingDeleteSuite, setPendingDeleteSuite] = useState<string | null>(null);
@@ -104,6 +106,14 @@ export default function SuitesExplorer({
       [suiteId]: c[suiteId].filter((x) => x.id !== caseId),
     }));
     setPendingDeleteCase(null);
+  }
+
+  async function reloadCases(suiteId: string) {
+    const res = await fetch(`/api/suites/${suiteId}/cases`);
+    if (res.ok) {
+      const cases = await res.json();
+      setCasesBySuite((c) => ({ ...c, [suiteId]: cases }));
+    }
   }
 
   function onCaseSaved(suiteId: string, testCase: TestCase, isNew: boolean) {
@@ -178,12 +188,20 @@ export default function SuitesExplorer({
               <h3 className="text-sm font-medium text-slate-700">
                 Casos de prueba
               </h3>
-              <button
-                onClick={openNewCase}
-                className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
-              >
-                + Nuevo caso
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
+                >
+                  ⬆️ Importar CSV
+                </button>
+                <button
+                  onClick={openNewCase}
+                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
+                >
+                  + Nuevo caso
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               {currentCases.map((c) => (
@@ -279,6 +297,16 @@ export default function SuitesExplorer({
           existing={editingCase}
           onClose={() => setShowCaseModal(false)}
           onSaved={onCaseSaved}
+        />
+      )}
+
+      {showImportModal && selectedSuite && (
+        <ImportCsvModal
+          suiteId={selectedSuite}
+          onClose={() => setShowImportModal(false)}
+          onImported={() => {
+            reloadCases(selectedSuite);
+          }}
         />
       )}
 
@@ -660,6 +688,199 @@ function CaseModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+type ImportSummary = {
+  created: number;
+  updated: number;
+  skipped: { title: string; reason: string }[];
+};
+
+function downloadTemplate() {
+  const blob = new Blob([CSV_TEMPLATE], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "plantilla-casos-de-prueba.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function ImportCsvModal({
+  suiteId,
+  onClose,
+  onImported,
+}: {
+  suiteId: string;
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState("");
+  const [parsedCount, setParsedCount] = useState(0);
+  const [parsedCases, setParsedCases] = useState<ReturnType<typeof rowsToCases>>([]);
+  const [parseError, setParseError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
+
+  function handleFile(file: File) {
+    setFileName(file.name);
+    setSummary(null);
+    setParseError("");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || "");
+      const rows = parseCsv(text);
+      const cases = rowsToCases(rows);
+      if (cases.length === 0) {
+        setParseError(
+          "No se encontraron filas con título. Revisá que la primera fila tenga los encabezados (titulo, prioridad, tipo...) y usá la plantilla si hace falta."
+        );
+      }
+      setParsedCases(cases);
+      setParsedCount(cases.length);
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  async function handleImport() {
+    if (parsedCases.length === 0) return;
+    setLoading(true);
+    const res = await fetch(`/api/suites/${suiteId}/cases/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cases: parsedCases }),
+    });
+    setLoading(false);
+    if (res.ok) {
+      const data: ImportSummary = await res.json();
+      setSummary(data);
+      onImported();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      setParseError(data.error || "No se pudo importar el archivo.");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto p-6">
+        <h2 className="text-lg font-semibold text-slate-900 mb-1">Importar casos desde CSV</h2>
+        <p className="text-sm text-slate-500 mb-4">
+          Se importan a la suite seleccionada. Si un caso con el mismo título ya existe en esta
+          suite, se actualiza en lugar de duplicarse.
+        </p>
+
+        {!summary && (
+          <>
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleFile(file);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/30"
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                }}
+              />
+              <p className="text-sm text-slate-600">
+                {fileName ? (
+                  <>
+                    📄 <span className="font-medium">{fileName}</span>
+                  </>
+                ) : (
+                  "Arrastrá un archivo .csv acá o hacé clic para elegirlo"
+                )}
+              </p>
+              {parsedCount > 0 && (
+                <p className="text-xs text-teal-700 mt-2">
+                  {parsedCount} caso{parsedCount === 1 ? "" : "s"} listo{parsedCount === 1 ? "" : "s"}{" "}
+                  para importar
+                </p>
+              )}
+            </div>
+
+            {parseError && <p className="text-sm text-red-600 mt-2">{parseError}</p>}
+
+            <div className="text-xs text-slate-500 mt-3 space-y-1">
+              <p>
+                Columnas esperadas: <code>titulo</code>, <code>precondiciones</code>,{" "}
+                <code>prioridad</code>, <code>tipo</code>, <code>tags</code>,{" "}
+                <code>automatizado</code> (si/no), <code>id_automatizacion</code>,{" "}
+                <code>pasos</code>.
+              </p>
+              <p>
+                Para vincular con Playwright, poné en <code>id_automatizacion</code> el mismo
+                título completo del test (ej: <code>Login &gt; should log in with valid credentials</code>)
+                y marcá <code>automatizado</code> como sí — así los resultados de Playwright se
+                asocian a ese caso en vez de crear uno nuevo.
+              </p>
+              <p>
+                Pasos: <code>paso::resultado esperado</code>, separando varios con{" "}
+                <code>|</code>.
+              </p>
+              <button
+                type="button"
+                onClick={downloadTemplate}
+                className="text-teal-600 hover:underline"
+              >
+                Descargar plantilla de ejemplo
+              </button>
+            </div>
+          </>
+        )}
+
+        {summary && (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-700">
+              ✅ {summary.created} creado{summary.created === 1 ? "" : "s"} · 🔄 {summary.updated}{" "}
+              actualizado{summary.updated === 1 ? "" : "s"} · ⏭️ {summary.skipped.length} omitido
+              {summary.skipped.length === 1 ? "" : "s"}
+            </p>
+            {summary.skipped.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                {summary.skipped.map((s, i) => (
+                  <p key={i} className="text-xs text-amber-800">
+                    <span className="font-medium">{s.title}:</span> {s.reason}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
+          >
+            {summary ? "Cerrar" : "Cancelar"}
+          </button>
+          {!summary && (
+            <button
+              type="button"
+              disabled={parsedCases.length === 0 || loading}
+              onClick={handleImport}
+              className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
+            >
+              {loading ? "Importando..." : `Importar ${parsedCount || ""} caso${parsedCount === 1 ? "" : "s"}`}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
