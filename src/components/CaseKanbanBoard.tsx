@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 
 export type KanbanColumn = {
@@ -95,10 +96,12 @@ export default function CaseKanbanBoard({
   projectId,
   initialColumns,
   initialCases,
+  headerActionsContainer,
 }: {
   projectId: string;
   initialColumns: KanbanColumn[];
   initialCases: KanbanCase[];
+  headerActionsContainer?: HTMLDivElement | null;
 }) {
   const router = useRouter();
   const [columns, setColumns] = useState(
@@ -254,8 +257,26 @@ export default function CaseKanbanBoard({
     await fetch(`/api/kanban-columns/${column.id}`, { method: "DELETE" });
   }
 
+  const headerActions = (
+    <>
+      <button
+        onClick={openAddModal}
+        className="text-sm font-medium rounded-lg bg-teal-600 text-white px-3 py-1.5 hover:bg-teal-700"
+      >
+        + Agregar casos {unassignedCases.length > 0 && `(${unassignedCases.length})`}
+      </button>
+      <button
+        onClick={() => setConfigOpen((v) => !v)}
+        className="text-sm font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+      >
+        ⚙ {configOpen ? "Cerrar configuración" : "Configurar columnas"}
+      </button>
+    </>
+  );
+
   return (
     <div>
+      {headerActionsContainer && createPortal(headerActions, headerActionsContainer)}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <select
@@ -280,20 +301,7 @@ export default function CaseKanbanBoard({
             <option value="automated">Solo automatizado</option>
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={openAddModal}
-            className="text-sm font-medium rounded-lg bg-teal-600 text-white px-3 py-1.5 hover:bg-teal-700"
-          >
-            + Agregar casos {unassignedCases.length > 0 && `(${unassignedCases.length})`}
-          </button>
-          <button
-            onClick={() => setConfigOpen((v) => !v)}
-            className="text-sm font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
-          >
-            ⚙ {configOpen ? "Cerrar configuración" : "Configurar columnas"}
-          </button>
-        </div>
+        {!headerActionsContainer && <div className="flex items-center gap-2">{headerActions}</div>}
       </div>
 
       {configOpen && (

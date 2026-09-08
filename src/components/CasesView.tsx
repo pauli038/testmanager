@@ -38,7 +38,7 @@ export default function CasesView({
   return (
     <div>
       <div className="flex items-center justify-end gap-2 mb-4">
-        {view === "suites" && <div ref={setHeaderActionsEl} className="flex gap-2" />}
+        <div ref={setHeaderActionsEl} className="flex gap-2" />
         <div className="flex rounded-lg border border-slate-200 overflow-hidden">
           <button
             onClick={() => setView("suites")}
@@ -71,6 +71,7 @@ export default function CasesView({
           projectId={projectId}
           initialColumns={initialColumns}
           initialCases={initialKanbanCases}
+          headerActionsContainer={headerActionsEl}
         />
       )}
     </div>
