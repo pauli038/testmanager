@@ -140,7 +140,7 @@ export default function SuitesExplorer({
         onClick={() => setShowImportModal(true)}
         className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
       >
-        ⬆️ Importar CSV
+        ⬆️ Importar casos
       </button>
       <button
         onClick={openNewCase}
@@ -737,22 +737,47 @@ function ImportCsvModal({
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
+  function applyRows(rows: string[][]) {
+    const cases = rowsToCases(rows);
+    if (cases.length === 0) {
+      setParseError(
+        "No se encontraron filas con título. Revisá que la primera fila tenga los encabezados (titulo, prioridad, tipo...) y usá la plantilla si hace falta."
+      );
+    }
+    setParsedCases(cases);
+    setParsedCount(cases.length);
+  }
+
   function handleFile(file: File) {
     setFileName(file.name);
     setSummary(null);
     setParseError("");
+    const isExcel = /\.xlsx?$/i.test(file.name);
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const XLSX = await import("xlsx");
+          const data = new Uint8Array(reader.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows: string[][] = XLSX.utils
+            .sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: "" })
+            .map((row) => row.map((cell) => String(cell ?? "")));
+          applyRows(rows);
+        } catch {
+          setParseError("No se pudo leer el archivo Excel. Verificá que sea un .xlsx válido.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result || "");
-      const rows = parseCsv(text);
-      const cases = rowsToCases(rows);
-      if (cases.length === 0) {
-        setParseError(
-          "No se encontraron filas con título. Revisá que la primera fila tenga los encabezados (titulo, prioridad, tipo...) y usá la plantilla si hace falta."
-        );
-      }
-      setParsedCases(cases);
-      setParsedCount(cases.length);
+      applyRows(parseCsv(text));
     };
     reader.readAsText(file, "utf-8");
   }
@@ -779,7 +804,7 @@ function ImportCsvModal({
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">Importar casos desde CSV</h2>
+        <h2 className="text-lg font-semibold text-slate-900 mb-1">Importar casos desde CSV o Excel</h2>
         <p className="text-sm text-slate-500 mb-4">
           Se importan a la suite seleccionada. Si un caso con el mismo título ya existe en esta
           suite, se actualiza en lugar de duplicarse.
@@ -800,7 +825,7 @@ function ImportCsvModal({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -813,7 +838,7 @@ function ImportCsvModal({
                     📄 <span className="font-medium">{fileName}</span>
                   </>
                 ) : (
-                  "Arrastrá un archivo .csv acá o hacé clic para elegirlo"
+                  "Arrastrá un archivo .csv o .xlsx acá o hacé clic para elegirlo"
                 )}
               </p>
               {parsedCount > 0 && (
