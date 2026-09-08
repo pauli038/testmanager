@@ -317,6 +317,7 @@ export default function SuitesExplorer({
           onClose={() => setShowImportModal(false)}
           onImported={() => {
             reloadCases(selectedSuite);
+            router.refresh();
           }}
         />
       )}
