@@ -642,7 +642,7 @@ export default function DefectsList({
 
       {viewingDefect && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-6">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-start justify-between mb-4">
               <h2 className="text-lg font-semibold text-slate-900">🐞 {viewingDefect.title}</h2>
               <span
@@ -747,17 +747,18 @@ export default function DefectsList({
                     <h3 className="text-sm font-medium text-slate-700 mb-2">Re-test</h3>
                     <div className="space-y-2">
                       {parsedRetests.map((r, i) => (
-                        <div key={i} className="rounded-lg border border-slate-100 p-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-500">{r.date || "—"}</span>
-                            <span
-                              className={`text-xs rounded px-1.5 py-0.5 ${retestResultColors[r.result] || ""}`}
-                            >
-                              {retestResultLabels[r.result] || r.result}
-                            </span>
-                          </div>
+                        <div
+                          key={i}
+                          className="flex items-start gap-3 rounded-lg border border-slate-100 p-2 text-sm"
+                        >
+                          <span className="text-slate-500 shrink-0">{r.date || "—"}</span>
+                          <span
+                            className={`shrink-0 text-xs rounded px-1.5 py-0.5 ${retestResultColors[r.result] || ""}`}
+                          >
+                            {retestResultLabels[r.result] || r.result}
+                          </span>
                           {r.comment && (
-                            <p className="text-slate-600 mt-1 whitespace-pre-wrap">{r.comment}</p>
+                            <p className="text-slate-600 whitespace-pre-wrap">{r.comment}</p>
                           )}
                         </div>
                       ))}
