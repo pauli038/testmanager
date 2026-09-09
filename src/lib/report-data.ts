@@ -23,6 +23,12 @@ const defectStatusLabels: Record<string, string> = {
   closed: "Cerrado",
 };
 
+const retestResultLabels: Record<string, string> = {
+  pending: "Pendiente",
+  passed: "Aprobado",
+  failed: "Fallido",
+};
+
 async function getProjectOrThrow(projectId: string) {
   const project = await db.query.projects.findFirst({ where: eq(projects.id, projectId) });
   if (!project) throw new Error("NOT_FOUND");
@@ -212,7 +218,7 @@ export async function getDefectsReportData(
   const project = await getProjectOrThrow(projectId);
 
   const attachmentsWith = {
-    case: { columns: { title: true } },
+    testCases: { with: { case: { columns: { title: true } } } },
     attachments: { columns: { filename: true, mimeType: true, data: true } },
   } as const;
 
@@ -242,6 +248,10 @@ export async function getDefectsReportData(
       ? JSON.parse(d.stepsToReproduce)
       : [];
     const steps = rawSteps.map((s) => (typeof s === "string" ? s : s.step));
+    const retests: Array<{ date?: string; result?: string; comment?: string }> = d.retests
+      ? JSON.parse(d.retests)
+      : [];
+    const caseTitles = d.testCases.map((tc) => tc.case.title);
     const images = d.attachments
       .filter((a) => a.mimeType === "image/png" || a.mimeType === "image/jpeg" || a.mimeType === "image/jpg")
       .map((a) => ({ filename: a.filename, mimeType: a.mimeType, base64: a.data }));
@@ -254,11 +264,24 @@ export async function getDefectsReportData(
         { label: "Módulo / Sección", value: d.module || "—" },
         { label: "Ambiente", value: d.environment || "—" },
         { label: "Fecha de detección", value: d.detectedAt || "—" },
-        { label: "Caso de prueba relacionado", value: d.case?.title || "—" },
+        { label: "Casos de prueba relacionados", value: caseTitles.length ? caseTitles.join(", ") : "—" },
         { label: "Descripción", value: d.description || "—" },
         {
           label: "Pasos a reproducir",
           value: steps.length ? steps.map((s, i) => `${i + 1}. ${s}`).join("\n") : "—",
+        },
+        {
+          label: "Re-test",
+          value: retests.length
+            ? retests
+                .map(
+                  (r, i) =>
+                    `${i + 1}. ${r.date || "—"} · ${retestResultLabels[r.result || ""] || r.result || "—"}${
+                      r.comment ? ` — ${r.comment}` : ""
+                    }`
+                )
+                .join("\n")
+            : "—",
         },
       ],
     };

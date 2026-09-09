@@ -4,6 +4,7 @@ import { useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 
 type CaseRef = { id: string; title: string };
+type RetestEntry = { date: string; result: string; comment: string };
 type Defect = {
   id: string;
   title: string;
@@ -12,10 +13,10 @@ type Defect = {
   module: string | null;
   environment: string | null;
   detectedAt: string | null;
-  caseId: string | null;
-  case: CaseRef | null;
+  cases: CaseRef[];
   severity: string;
   status: string;
+  retests: string;
   createdAt: string;
   attachments: { id: string; filename: string; url: string }[];
 };
@@ -39,6 +40,18 @@ const statusLabels: Record<string, string> = {
   closed: "Cerrado",
 };
 
+const retestResultColors: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700",
+  passed: "bg-emerald-100 text-emerald-700",
+  failed: "bg-red-100 text-red-700",
+};
+
+const retestResultLabels: Record<string, string> = {
+  pending: "Pendiente",
+  passed: "Aprobado",
+  failed: "Fallido",
+};
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -55,6 +68,16 @@ function parseSteps(raw: string): string[] {
   if (!raw) return [];
   const parsed = JSON.parse(raw);
   return parsed.map((s: string | { step: string }) => (typeof s === "string" ? s : s.step));
+}
+
+function parseRetests(raw: string): RetestEntry[] {
+  if (!raw) return [];
+  const parsed = JSON.parse(raw);
+  return parsed.map((r: Partial<RetestEntry>) => ({
+    date: r.date || "",
+    result: r.result || "pending",
+    comment: r.comment || "",
+  }));
 }
 
 export default function DefectsList({
@@ -77,7 +100,8 @@ export default function DefectsList({
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
   const [steps, setSteps] = useState<string[]>([""]);
-  const [caseId, setCaseId] = useState("");
+  const [caseIds, setCaseIds] = useState<string[]>([]);
+  const [retests, setRetests] = useState<RetestEntry[]>([]);
   const [moduleField, setModuleField] = useState("");
   const [environment, setEnvironment] = useState("");
   const [detectedAt, setDetectedAt] = useState(todayStr());
@@ -92,7 +116,8 @@ export default function DefectsList({
     setDescription("");
     setSeverity("medium");
     setSteps([""]);
-    setCaseId("");
+    setCaseIds([]);
+    setRetests([]);
     setModuleField("");
     setEnvironment("");
     setDetectedAt(todayStr());
@@ -106,7 +131,8 @@ export default function DefectsList({
     setSeverity(d.severity);
     const parsedSteps = parseSteps(d.stepsToReproduce);
     setSteps(parsedSteps.length ? parsedSteps : [""]);
-    setCaseId(d.caseId || "");
+    setCaseIds(d.cases.map((c) => c.id));
+    setRetests(parseRetests(d.retests));
     setModuleField(d.module || "");
     setEnvironment(d.environment || "");
     setDetectedAt(d.detectedAt || todayStr());
@@ -129,6 +155,22 @@ export default function DefectsList({
     setSteps((s) => s.filter((_, i) => i !== idx));
   }
 
+  function toggleCase(id: string) {
+    setCaseIds((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+  }
+
+  function addRetest() {
+    setRetests((r) => [...r, { date: todayStr(), result: "pending", comment: "" }]);
+  }
+
+  function updateRetest(idx: number, field: keyof RetestEntry, value: string) {
+    setRetests((r) => r.map((entry, i) => (i === idx ? { ...entry, [field]: value } : entry)));
+  }
+
+  function removeRetest(idx: number) {
+    setRetests((r) => r.filter((_, i) => i !== idx));
+  }
+
   async function saveDefect(e: React.FormEvent) {
     e.preventDefault();
     const payload = {
@@ -136,10 +178,11 @@ export default function DefectsList({
       description,
       severity,
       stepsToReproduce: steps.map((s) => s.trim()).filter(Boolean),
-      caseId: caseId || null,
+      caseIds,
       module: moduleField || null,
       environment: environment || null,
       detectedAt: detectedAt || null,
+      retests: retests.filter((r) => r.date || r.comment.trim()),
     };
     const res = editingDefect
       ? await fetch(`/api/defects/${editingDefect.id}`, {
@@ -308,11 +351,14 @@ export default function DefectsList({
                       🧩 {d.module}
                     </span>
                   )}
-                  {d.case && (
-                    <span className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5">
-                      🔗 {d.case.title}
+                  {d.cases.map((c) => (
+                    <span
+                      key={c.id}
+                      className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5"
+                    >
+                      🔗 {c.title}
                     </span>
-                  )}
+                  ))}
                 </div>
                 <div className="mt-3">
                   <p className="text-xs text-slate-400 mb-1.5">Evidencia</p>
@@ -495,20 +541,81 @@ export default function DefectsList({
 
               <div>
                 <label className="block text-sm text-slate-700 mb-1">
-                  Caso de prueba relacionado
+                  Casos de prueba relacionados
                 </label>
-                <select
-                  value={caseId}
-                  onChange={(e) => setCaseId(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
-                >
-                  <option value="">— Ninguno —</option>
-                  {cases.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title}
-                    </option>
+                {cases.length ? (
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 divide-y divide-slate-100">
+                    {cases.map((c) => (
+                      <label
+                        key={c.id}
+                        className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={caseIds.includes(c.id)}
+                          onChange={() => toggleCase(c.id)}
+                          className="rounded border-slate-300"
+                        />
+                        {c.title}
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No hay casos de prueba en este proyecto.</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm text-slate-700">Re-test</label>
+                  <button
+                    type="button"
+                    onClick={addRetest}
+                    className="text-xs text-teal-600 hover:underline"
+                  >
+                    + agregar re-test
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {retests.map((r, i) => (
+                    <div key={i} className="rounded-lg border border-slate-200 p-2.5 space-y-2">
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="date"
+                          value={r.date}
+                          onChange={(e) => updateRetest(i, "date", e.target.value)}
+                          className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        />
+                        <select
+                          value={r.result}
+                          onChange={(e) => updateRetest(i, "result", e.target.value)}
+                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        >
+                          <option value="pending">Pendiente</option>
+                          <option value="passed">Aprobado</option>
+                          <option value="failed">Fallido</option>
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => removeRetest(i)}
+                          className="text-slate-400 hover:text-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <textarea
+                        placeholder="Comentario del re-test"
+                        value={r.comment}
+                        onChange={(e) => updateRetest(i, "comment", e.target.value)}
+                        rows={1}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                      />
+                    </div>
                   ))}
-                </select>
+                  {retests.length === 0 && (
+                    <p className="text-xs text-slate-400">Sin re-tests registrados.</p>
+                  )}
+                </div>
               </div>
 
               <div className="flex justify-end gap-2">
@@ -612,14 +719,51 @@ export default function DefectsList({
               </div>
             )}
 
-            {viewingDefect.case && (
+            {viewingDefect.cases.length > 0 && (
               <div className="mb-4">
                 <h3 className="text-sm font-medium text-slate-700 mb-1">
-                  Caso de prueba relacionado
+                  Casos de prueba relacionados
                 </h3>
-                <p className="text-sm text-slate-600">🔗 {viewingDefect.case.title}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {viewingDefect.cases.map((c) => (
+                    <span
+                      key={c.id}
+                      className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5"
+                    >
+                      🔗 {c.title}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
+
+            {(() => {
+              const parsedRetests = parseRetests(viewingDefect.retests);
+              return (
+                parsedRetests.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium text-slate-700 mb-2">Re-test</h3>
+                    <div className="space-y-2">
+                      {parsedRetests.map((r, i) => (
+                        <div key={i} className="rounded-lg border border-slate-100 p-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-500">{r.date || "—"}</span>
+                            <span
+                              className={`text-xs rounded px-1.5 py-0.5 ${retestResultColors[r.result] || ""}`}
+                            >
+                              {retestResultLabels[r.result] || r.result}
+                            </span>
+                          </div>
+                          {r.comment && (
+                            <p className="text-slate-600 mt-1 whitespace-pre-wrap">{r.comment}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              );
+            })()}
 
             {viewingDefect.attachments.length > 0 && (
               <div className="mb-4">

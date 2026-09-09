@@ -15,7 +15,7 @@
  * Requiere DATABASE_URL apuntando a la base real (mismo .env que usa la app).
  */
 import { db } from "../src/db";
-import { testSuites, testCases, testRunCases, defects } from "../src/db/schema";
+import { testSuites, testCases, testRunCases, defectTestCases } from "../src/db/schema";
 import { eq, and, ne, inArray } from "drizzle-orm";
 
 const APPLY = process.argv.includes("--apply");
@@ -69,7 +69,10 @@ async function main() {
           .where(eq(testRunCases.caseId, dup.id))
       ).length;
       const defectCount = (
-        await db.select({ id: defects.id }).from(defects).where(eq(defects.caseId, dup.id))
+        await db
+          .select({ id: defectTestCases.id })
+          .from(defectTestCases)
+          .where(eq(defectTestCases.caseId, dup.id))
       ).length;
 
       console.log(
@@ -83,7 +86,10 @@ async function main() {
           .update(testRunCases)
           .set({ caseId: keeper.id })
           .where(eq(testRunCases.caseId, dup.id));
-        await db.update(defects).set({ caseId: keeper.id }).where(eq(defects.caseId, dup.id));
+        await db
+          .update(defectTestCases)
+          .set({ caseId: keeper.id })
+          .where(eq(defectTestCases.caseId, dup.id));
         if (!keeper.automationId && dup.automationId) {
           await db
             .update(testCases)

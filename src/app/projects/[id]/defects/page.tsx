@@ -8,7 +8,10 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
   const all = await db.query.defects.findMany({
     where: eq(defects.projectId, id),
     orderBy: (d, { desc }) => [desc(d.createdAt)],
-    with: { attachments: true, case: { columns: { id: true, title: true } } },
+    with: {
+      attachments: true,
+      testCases: { with: { case: { columns: { id: true, title: true } } } },
+    },
   });
   const initialDefects = all.map((d) => ({
     ...d,
@@ -17,6 +20,7 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
       filename: a.filename,
       url: `data:${a.mimeType};base64,${a.data}`,
     })),
+    cases: d.testCases.map((tc) => tc.case),
   }));
 
   const suites = await db.query.testSuites.findMany({

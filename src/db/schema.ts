@@ -131,6 +131,7 @@ export const testCasesRelations = relations(testCases, ({ one, many }) => ({
     references: [testSuites.id],
   }),
   runCases: many(testRunCases),
+  defectLinks: many(defectTestCases),
 }));
 
 // ---------- Case Kanban Columns ----------
@@ -278,7 +279,6 @@ export const defects = pgTable("defects", {
   runCaseId: text("run_case_id").references(() => testRunCases.id, {
     onDelete: "set null",
   }),
-  caseId: text("case_id").references(() => testCases.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description"),
   // steps to reproduce, stored as JSON string: string[]
@@ -292,6 +292,8 @@ export const defects = pgTable("defects", {
   status: text("status", { enum: ["open", "in_progress", "closed"] })
     .notNull()
     .default("open"),
+  // re-test history, stored as JSON string: { date, result, comment }[]
+  retests: text("retests").notNull().default("[]"),
   createdBy: text("created_by").references(() => users.id),
   createdAt: createdAt(),
 });
@@ -305,11 +307,31 @@ export const defectsRelations = relations(defects, ({ one, many }) => ({
     fields: [defects.runCaseId],
     references: [testRunCases.id],
   }),
+  testCases: many(defectTestCases),
+  attachments: many(attachments),
+}));
+
+// ---------- Defect <-> Test Case links (many-to-many) ----------
+export const defectTestCases = pgTable("defect_test_cases", {
+  id: id(),
+  defectId: text("defect_id")
+    .notNull()
+    .references(() => defects.id, { onDelete: "cascade" }),
+  caseId: text("case_id")
+    .notNull()
+    .references(() => testCases.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+});
+
+export const defectTestCasesRelations = relations(defectTestCases, ({ one }) => ({
+  defect: one(defects, {
+    fields: [defectTestCases.defectId],
+    references: [defects.id],
+  }),
   case: one(testCases, {
-    fields: [defects.caseId],
+    fields: [defectTestCases.caseId],
     references: [testCases.id],
   }),
-  attachments: many(attachments),
 }));
 
 // ---------- Attachments (evidence/screenshots) ----------
