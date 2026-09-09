@@ -544,19 +544,21 @@ export default function DefectsList({
                   Casos de prueba relacionados
                 </label>
                 {cases.length ? (
-                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 divide-y divide-slate-100">
+                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
                     {cases.map((c) => (
                       <label
                         key={c.id}
-                        className="flex items-center gap-2 px-2.5 py-1.5 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        className="flex items-center gap-2 px-1 py-1 text-sm text-slate-700 hover:bg-slate-50 rounded cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={caseIds.includes(c.id)}
                           onChange={() => toggleCase(c.id)}
-                          className="rounded border-slate-300"
+                          className="rounded border-slate-300 shrink-0"
                         />
-                        {c.title}
+                        <span className="truncate" title={c.title}>
+                          {c.title}
+                        </span>
                       </label>
                     ))}
                   </div>
