@@ -342,6 +342,11 @@ export const attachments = pgTable("attachments", {
   id: id(),
   runCaseId: text("run_case_id").references(() => testRunCases.id, { onDelete: "cascade" }),
   defectId: text("defect_id").references(() => defects.id, { onDelete: "cascade" }),
+  // Client-generated id of a single entry inside defects.retests (JSON), when
+  // this attachment is evidence for one specific re-test instead of the
+  // defect in general. Not a FK: retest entries aren't rows in their own
+  // table. Null means "general defect evidence".
+  retestId: text("retest_id"),
   filename: text("filename").notNull(),
   data: text("data").notNull(), // base64-encoded file content
   mimeType: text("mime_type").notNull().default("image/png"),

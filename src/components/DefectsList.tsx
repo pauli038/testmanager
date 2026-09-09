@@ -4,7 +4,8 @@ import { useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 
 type CaseRef = { id: string; title: string };
-type RetestEntry = { date: string; result: string; comment: string };
+type RetestEntry = { id: string; date: string; result: string; comment: string };
+type Attachment = { id: string; filename: string; url: string; retestId: string | null };
 type Defect = {
   id: string;
   title: string;
@@ -18,7 +19,7 @@ type Defect = {
   status: string;
   retests: string;
   createdAt: string;
-  attachments: { id: string; filename: string; url: string }[];
+  attachments: Attachment[];
 };
 
 const severityColors: Record<string, string> = {
@@ -70,10 +71,19 @@ function parseSteps(raw: string): string[] {
   return parsed.map((s: string | { step: string }) => (typeof s === "string" ? s : s.step));
 }
 
+function newId() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
+// Backfills an id for retest entries saved before this field existed, so
+// evidence uploads always have something stable to key off.
 function parseRetests(raw: string): RetestEntry[] {
   if (!raw) return [];
   const parsed = JSON.parse(raw);
   return parsed.map((r: Partial<RetestEntry>) => ({
+    id: r.id || newId(),
     date: r.date || "",
     result: r.result || "pending",
     comment: r.comment || "",
@@ -160,7 +170,7 @@ export default function DefectsList({
   }
 
   function addRetest() {
-    setRetests((r) => [...r, { date: todayStr(), result: "pending", comment: "" }]);
+    setRetests((r) => [...r, { id: newId(), date: todayStr(), result: "pending", comment: "" }]);
   }
 
   function updateRetest(idx: number, field: keyof RetestEntry, value: string) {
@@ -223,19 +233,23 @@ export default function DefectsList({
     setPendingDelete(null);
   }
 
-  async function uploadEvidence(defectId: string, file: File) {
+  async function uploadEvidence(defectId: string, file: File, retestId?: string) {
     const fd = new FormData();
     fd.append("file", file);
+    if (retestId) fd.append("retestId", retestId);
     const res = await fetch(`/api/defects/${defectId}/attachments`, {
       method: "POST",
       body: fd,
     });
     if (res.ok) {
-      const attachment = await res.json();
+      const attachment: Attachment = await res.json();
       setDefects((d) =>
         d.map((x) =>
           x.id === defectId ? { ...x, attachments: [...x.attachments, attachment] } : x
         )
+      );
+      setViewingDefect((v) =>
+        v && v.id === defectId ? { ...v, attachments: [...v.attachments, attachment] } : v
       );
     }
   }
@@ -363,16 +377,18 @@ export default function DefectsList({
                 <div className="mt-3">
                   <p className="text-xs text-slate-400 mb-1.5">Evidencia</p>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {d.attachments.map((a) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => setViewingImage(a)}
-                        className="block w-14 h-14 rounded-lg border border-slate-200 overflow-hidden shrink-0"
-                      >
-                        <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
+                    {d.attachments
+                      .filter((a) => !a.retestId)
+                      .map((a) => (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setViewingImage(a)}
+                          className="block w-14 h-14 rounded-lg border border-slate-200 overflow-hidden shrink-0"
+                        >
+                          <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
                     <label
                       title="Subir evidencia"
                       className="flex items-center justify-center w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
@@ -746,20 +762,49 @@ export default function DefectsList({
                   <div className="mb-4">
                     <h3 className="text-sm font-medium text-slate-700 mb-2">Re-test</h3>
                     <div className="space-y-2">
-                      {parsedRetests.map((r, i) => (
-                        <div
-                          key={i}
-                          className="flex items-start gap-3 rounded-lg border border-slate-100 p-2 text-sm"
-                        >
-                          <span className="text-slate-500 shrink-0">{r.date || "—"}</span>
-                          <span
-                            className={`shrink-0 text-xs rounded px-1.5 py-0.5 ${retestResultColors[r.result] || ""}`}
-                          >
-                            {retestResultLabels[r.result] || r.result}
-                          </span>
-                          {r.comment && (
-                            <p className="text-slate-600 whitespace-pre-wrap">{r.comment}</p>
-                          )}
+                      {parsedRetests.map((r) => (
+                        <div key={r.id} className="rounded-lg border border-slate-100 p-2 text-sm space-y-2">
+                          <div className="flex items-start gap-3">
+                            <span className="text-slate-500 shrink-0">{r.date || "—"}</span>
+                            <span
+                              className={`shrink-0 text-xs rounded px-1.5 py-0.5 ${retestResultColors[r.result] || ""}`}
+                            >
+                              {retestResultLabels[r.result] || r.result}
+                            </span>
+                            {r.comment && (
+                              <p className="text-slate-600 whitespace-pre-wrap">{r.comment}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {viewingDefect.attachments
+                              .filter((a) => a.retestId === r.id)
+                              .map((a) => (
+                                <button
+                                  key={a.id}
+                                  type="button"
+                                  onClick={() => setViewingImage(a)}
+                                  className="block w-12 h-12 rounded border border-slate-200 overflow-hidden shrink-0"
+                                >
+                                  <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
+                                </button>
+                              ))}
+                            <label
+                              title="Subir evidencia del re-test"
+                              className="flex items-center justify-center w-12 h-12 rounded border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
+                            >
+                              <span className="text-lg leading-none">+</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) uploadEvidence(viewingDefect.id, file, r.id);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          </div>
                         </div>
                       ))}
                     </div>

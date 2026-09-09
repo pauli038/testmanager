@@ -57,6 +57,13 @@
       "when": 1788966024451,
       "tag": "0007_drop_defects_case_id",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788969980263,
+      "tag": "0008_add_attachments_retest_id",
+      "breakpoints": true
     }
   ]
 }

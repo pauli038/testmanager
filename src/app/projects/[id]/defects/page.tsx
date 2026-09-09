@@ -19,6 +19,7 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
       id: a.id,
       filename: a.filename,
       url: `data:${a.mimeType};base64,${a.data}`,
+      retestId: a.retestId,
     })),
     cases: d.testCases.map((tc) => tc.case),
   }));

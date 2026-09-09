@@ -1,0 +1,1 @@
+ALTER TABLE "attachments" ADD COLUMN "retest_id" text;

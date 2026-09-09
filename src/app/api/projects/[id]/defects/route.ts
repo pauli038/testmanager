@@ -22,6 +22,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       id: a.id,
       filename: a.filename,
       url: `data:${a.mimeType};base64,${a.data}`,
+      retestId: a.retestId,
     })),
     cases: d.testCases.map((tc) => tc.case),
     testCases: undefined,

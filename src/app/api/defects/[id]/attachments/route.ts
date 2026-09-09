@@ -12,6 +12,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
+  const retestId = (formData.get("retestId") as string | null) || null;
   if (!file) return NextResponse.json({ error: "Archivo requerido" }, { status: 400 });
   if (file.size > MAX_SIZE_BYTES) {
     return NextResponse.json(
@@ -30,6 +31,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       .insert(attachments)
       .values({
         defectId: id,
+        retestId,
         filename: file.name,
         data: base64,
         mimeType,
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         id: attachment.id,
         filename: attachment.filename,
         url: `data:${mimeType};base64,${base64}`,
+        retestId: attachment.retestId,
       },
       { status: 201 }
     );
