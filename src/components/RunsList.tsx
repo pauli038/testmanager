@@ -211,9 +211,13 @@ export default function RunsList({
                     >
                       {r.name}
                     </Link>
-                    {r.source === "playwright" && (
+                    {r.source === "playwright" ? (
                       <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 mt-1 inline-block">
                         🤖 Playwright
+                      </span>
+                    ) : (
+                      <span className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5 mt-1 inline-block">
+                        ✏️ Manual
                       </span>
                     )}
                   </div>
