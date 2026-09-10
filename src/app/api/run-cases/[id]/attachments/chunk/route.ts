@@ -10,7 +10,7 @@ import { requireUser } from "@/lib/require-auth";
 // this app runs as a single long-lived container (see Dockerfile) — it
 // would need a shared store (Redis, etc.) on a multi-instance deployment.
 const uploadBuffers = new Map<string, Buffer[]>();
-const MAX_TOTAL_BYTES = 30 * 1024 * 1024; // 30MB
+const MAX_TOTAL_BYTES = 100 * 1024 * 1024; // 100MB
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { error } = await requireUser();
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const full = Buffer.concat(parts);
   if (full.length > MAX_TOTAL_BYTES) {
-    return NextResponse.json({ error: "El archivo es muy grande (máximo 30MB)" }, { status: 413 });
+    return NextResponse.json({ error: "El archivo es muy grande (máximo 100MB)" }, { status: 413 });
   }
 
   try {
