@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { attachments, uploadChunks } from "@/db/schema";
+import { attachments } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
-import { asc, eq } from "drizzle-orm";
 
 // Some reverse proxies / tunnels (e.g. VS Code Dev Tunnels) reject large
 // request bodies with a 413 well below our own size limits. Uploading in
 // small chunks and assembling them here sidesteps that, whatever the exact
-// external cutoff is. Chunks are staged in the database rather than an
-// in-memory buffer: this runs as stateless serverless functions (Vercel), so
-// consecutive chunk requests for the same uploadId can land on different
-// instances and an in-memory Map would silently lose parts.
+// external cutoff is. This buffer is in-memory, which only works because
+// this app runs as a single long-lived container (see Dockerfile) — it
+// would need a shared store (Redis, etc.) on a multi-instance deployment.
+const uploadBuffers = new Map<string, Buffer[]>();
 const MAX_TOTAL_BYTES = 100 * 1024 * 1024; // 100MB
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -30,33 +29,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Datos de parte inválidos" }, { status: 400 });
   }
 
-  const chunkBase64 = Buffer.from(await chunk.arrayBuffer()).toString("base64");
-  await db.insert(uploadChunks).values({ uploadId, chunkIndex, data: chunkBase64 });
+  const parts = uploadBuffers.get(uploadId) || [];
+  parts[chunkIndex] = Buffer.from(await chunk.arrayBuffer());
+  uploadBuffers.set(uploadId, parts);
 
   if (chunkIndex < totalChunks - 1) {
     return NextResponse.json({ ok: true, received: chunkIndex });
   }
 
   // Last chunk received — assemble and persist.
+  uploadBuffers.delete(uploadId);
+  if (parts.length !== totalChunks || parts.some((p) => !p)) {
+    return NextResponse.json({ error: "Faltan partes del archivo, intenta de nuevo" }, { status: 400 });
+  }
+
+  const full = Buffer.concat(parts);
+  if (full.length > MAX_TOTAL_BYTES) {
+    return NextResponse.json({ error: "El archivo es muy grande (máximo 100MB)" }, { status: 413 });
+  }
+
   try {
-    const rows = await db
-      .select()
-      .from(uploadChunks)
-      .where(eq(uploadChunks.uploadId, uploadId))
-      .orderBy(asc(uploadChunks.chunkIndex));
-
-    if (rows.length !== totalChunks || rows.some((r, i) => r.chunkIndex !== i)) {
-      return NextResponse.json({ error: "Faltan partes del archivo, intenta de nuevo" }, { status: 400 });
-    }
-
-    const full = Buffer.concat(rows.map((r) => Buffer.from(r.data, "base64")));
-    if (full.length > MAX_TOTAL_BYTES) {
-      return NextResponse.json({ error: "El archivo es muy grande (máximo 100MB)" }, { status: 413 });
-    }
-
+    const base64 = full.toString("base64");
     const [attachment] = await db
       .insert(attachments)
-      .values({ runCaseId: id, filename, data: full.toString("base64"), mimeType })
+      .values({ runCaseId: id, filename, data: base64, mimeType })
       .returning();
 
     return NextResponse.json(
@@ -71,7 +67,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   } catch (err) {
     console.error("Failed to save chunked attachment:", err);
     return NextResponse.json({ error: "No se pudo guardar el archivo en la base de datos" }, { status: 500 });
-  } finally {
-    await db.delete(uploadChunks).where(eq(uploadChunks.uploadId, uploadId));
   }
 }

@@ -364,19 +364,6 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   }),
 }));
 
-// ---------- Upload Chunks (temp storage while assembling a chunked upload) ----------
-// Chunked evidence uploads can't rely on in-memory state between requests —
-// this runs as stateless serverless functions, so consecutive chunk requests
-// for the same uploadId can land on different instances. Chunks are staged
-// here (and deleted once assembled) so any instance can finish the upload.
-export const uploadChunks = pgTable("upload_chunks", {
-  id: id(),
-  uploadId: text("upload_id").notNull(),
-  chunkIndex: integer("chunk_index").notNull(),
-  data: text("data").notNull(), // base64-encoded chunk bytes
-  createdAt: createdAt(),
-});
-
 // ---------- API Keys (for Playwright integration) ----------
 export const apiKeys = pgTable("api_keys", {
   id: id(),
