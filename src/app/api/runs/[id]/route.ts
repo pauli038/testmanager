@@ -37,6 +37,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const allAttachments = runCaseIds.length
     ? await db.query.attachments.findMany({
         where: (a, { inArray }) => inArray(a.runCaseId, runCaseIds),
+        // Exclude the base64 `data` column — a run with several images (or a
+        // large video) would otherwise blow past Vercel's response-size
+        // limit. The actual bytes are served on demand via /api/attachments/[id].
+        columns: { id: true, runCaseId: true, filename: true, mimeType: true },
       })
     : [];
   const allDefects = runCaseIds.length
@@ -52,7 +56,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       .map((a) => ({
         id: a.id,
         filename: a.filename,
-        url: `data:${a.mimeType};base64,${a.data}`,
+        url: `/api/attachments/${a.id}`,
+        mimeType: a.mimeType,
       })),
     defects: allDefects.filter((d) => d.runCaseId === rc.id),
   }));

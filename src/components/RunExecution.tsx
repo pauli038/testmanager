@@ -48,7 +48,7 @@ type RunCase = {
   casePreconditions: string | null;
   casePriority: string;
   caseAutomated: boolean;
-  attachments: { id: string; url: string; filename: string }[];
+  attachments: { id: string; url: string; filename: string; mimeType: string }[];
   defects: { id: string; title: string; status: string }[];
 };
 
@@ -158,7 +158,7 @@ export default function RunExecution({
   async function readUploadResult(
     runCaseId: string,
     res: Response
-  ): Promise<{ id: string; filename: string; url: string } | null> {
+  ): Promise<{ id: string; filename: string; url: string; mimeType: string } | null> {
     if (res.ok) return res.json();
     const rawText = await res.text().catch(() => "");
     console.error("Evidence upload failed:", res.status, rawText);
@@ -193,7 +193,7 @@ export default function RunExecution({
       }
     }
 
-    let attachment: { id: string; filename: string; url: string } | null;
+    let attachment: { id: string; filename: string; url: string; mimeType: string } | null;
     try {
       attachment =
         file.size > CHUNK_THRESHOLD_BYTES
@@ -423,7 +423,7 @@ export default function RunExecution({
                     )}
                     <div className="flex items-center gap-2 flex-wrap">
                       {c.attachments.map((a) => {
-                        const isVideo = a.url.startsWith("data:video/");
+                        const isVideo = a.mimeType.startsWith("video/");
                         return (
                           <div key={a.id} className="relative group w-16 h-16 shrink-0">
                             <a

@@ -12,7 +12,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     where: eq(defects.projectId, id),
     orderBy: (d, { desc }) => [desc(d.createdAt)],
     with: {
-      attachments: true,
+      // Exclude the base64 `data` column — a project with several defect
+      // images would otherwise blow past Vercel's response-size limit.
+      // The actual bytes are served on demand via /api/attachments/[id].
+      attachments: { columns: { id: true, filename: true, retestId: true } },
       testCases: { with: { case: { columns: { id: true, title: true } } } },
     },
   });
@@ -21,7 +24,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     attachments: d.attachments.map((a) => ({
       id: a.id,
       filename: a.filename,
-      url: `data:${a.mimeType};base64,${a.data}`,
+      url: `/api/attachments/${a.id}`,
       retestId: a.retestId,
     })),
     cases: d.testCases.map((tc) => tc.case),

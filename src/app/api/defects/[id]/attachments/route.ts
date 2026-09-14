@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       {
         id: attachment.id,
         filename: attachment.filename,
-        url: `data:${mimeType};base64,${base64}`,
+        url: `/api/attachments/${attachment.id}`,
         retestId: attachment.retestId,
       },
       { status: 201 }
