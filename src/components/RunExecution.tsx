@@ -71,6 +71,7 @@ export default function RunExecution({
   const [runCases, setRunCases] = useState<RunCase[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<{ runCaseId: string; message: string } | null>(
     null
   );
@@ -90,12 +91,22 @@ export default function RunExecution({
     function load(showSpinner: boolean) {
       if (showSpinner) setLoading(true);
       fetch(`/api/runs/${runId}`)
-        .then((res) => res.json())
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
         .then((data) => {
           if (cancelled) return;
           setRun(data.run);
           setRunCases(data.runCases);
           setLoading(false);
+          setLoadError(null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.error("Error cargando la ejecución:", err);
+          setLoading(false);
+          setLoadError("No se pudo cargar la ejecución. Intenta recargar la página.");
         });
     }
 
@@ -284,6 +295,7 @@ export default function RunExecution({
   }
 
   if (loading) return <p className="text-sm text-slate-400">Cargando ejecución...</p>;
+  if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
 
   const stats = runCases.reduce(
     (acc, c) => {
