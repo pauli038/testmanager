@@ -86,16 +86,26 @@ export default function RunExecution({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/runs/${runId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return;
-        setRun(data.run);
-        setRunCases(data.runCases);
-        setLoading(false);
-      });
+
+    function load(showSpinner: boolean) {
+      if (showSpinner) setLoading(true);
+      fetch(`/api/runs/${runId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled) return;
+          setRun(data.run);
+          setRunCases(data.runCases);
+          setLoading(false);
+        });
+    }
+
+    load(true);
+    // Auto-refresh so results entered by other testers on this same run show
+    // up without needing a manual page reload.
+    const interval = setInterval(() => load(false), 10000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [runId]);
 
