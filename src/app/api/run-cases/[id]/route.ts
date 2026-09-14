@@ -15,8 +15,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     .set({
       status: body.status,
       comment: body.comment,
-      executedBy: user!.id,
-      executedAt: new Date().toISOString(),
+      executedBy: body.status !== undefined ? user!.id : undefined,
+      executedAt: "executedAt" in body
+        ? body.executedAt || null
+        : body.status !== undefined
+          ? new Date().toISOString()
+          : undefined,
     })
     .where(eq(testRunCases.id, id))
     .returning();

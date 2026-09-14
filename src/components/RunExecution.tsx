@@ -10,6 +10,13 @@ const MAX_VIDEO_SECONDS = 60;
 const CHUNK_THRESHOLD_BYTES = 4 * 1024 * 1024; // 4MB
 const CHUNK_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
 
+function toLocalDateStr(iso: string) {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
 function getVideoDuration(file: File): Promise<number> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
@@ -60,7 +67,7 @@ export default function RunExecution({
   projectId: string;
   runId: string;
 }) {
-  const [run, setRun] = useState<{ id: string; name: string } | null>(null);
+  const [run, setRun] = useState<{ id: string; name: string; source: string } | null>(null);
   const [runCases, setRunCases] = useState<RunCase[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -93,19 +100,34 @@ export default function RunExecution({
   }, [runId]);
 
   async function setStatus(runCaseId: string, status: RunCase["status"]) {
-    setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, status } : c)));
+    // Preserve a previously set/edited execution date instead of always
+    // restamping "now" — only defaults to now the first time a case is executed.
+    const executedAt = runCases.find((c) => c.id === runCaseId)?.executedAt ?? new Date().toISOString();
+    setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, status, executedAt } : c)));
     await fetch(`/api/run-cases/${runCaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, executedAt }),
     });
   }
 
   async function saveComment(runCaseId: string, comment: string) {
+    const current = runCases.find((c) => c.id === runCaseId);
     await fetch(`/api/run-cases/${runCaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: runCases.find((c) => c.id === runCaseId)?.status, comment }),
+      body: JSON.stringify({ status: current?.status, comment, executedAt: current?.executedAt ?? null }),
+    });
+  }
+
+  async function saveExecutedAt(runCaseId: string, dateStr: string) {
+    const executedAt = dateStr ? new Date(`${dateStr}T12:00:00`).toISOString() : null;
+    setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, executedAt } : c)));
+    const current = runCases.find((c) => c.id === runCaseId);
+    await fetch(`/api/run-cases/${runCaseId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: current?.status, executedAt }),
     });
   }
 
@@ -452,10 +474,23 @@ export default function RunExecution({
                     </div>
                   )}
 
-                  <div className="text-xs text-slate-400">
-                    {c.executedByName && <span>Ejecutado por {c.executedByName} · </span>}
-                    {c.executedAt && <span>{new Date(c.executedAt).toLocaleString("es-CR")}</span>}
-                    {c.durationMs != null && <span> · {c.durationMs}ms</span>}
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-slate-400">
+                    {c.executedByName && <span>Ejecutado por {c.executedByName}</span>}
+                    {run?.source === "manual" ? (
+                      <label className="flex items-center gap-1">
+                        <span>Fecha de ejecución</span>
+                        <input
+                          type="date"
+                          value={c.executedAt ? toLocalDateStr(c.executedAt) : ""}
+                          onChange={(e) => saveExecutedAt(c.id, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="rounded border border-slate-200 px-1.5 py-0.5 text-xs text-slate-600"
+                        />
+                      </label>
+                    ) : (
+                      c.executedAt && <span>{new Date(c.executedAt).toLocaleString("es-CR")}</span>
+                    )}
+                    {c.durationMs != null && <span>{c.durationMs}ms</span>}
                   </div>
                 </div>
               )}
