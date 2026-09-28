@@ -28,8 +28,8 @@ Tu propio Test Manager (tipo TestRail/Qase), hecho a la medida y sin costo de li
 
 ## Correr en local
 
-1. Crea una base de datos Postgres gratis en [Neon](https://neon.tech) (regístrate, "New Project", copia el "Connection string"). Toma 1 minuto y no pide tarjeta.
-2. Copia `.env.example` a `.env` y pega esa cadena de conexión en `DATABASE_URL`.
+1. Crea un proyecto gratis en [Supabase](https://supabase.com) ("New project"). En **Connect** (o *Project Settings → Database*) copia el *Connection string* del **Session pooler** (puerto `5432`).
+2. Copia `.env.example` a `.env` y pega esa cadena de conexión en `DATABASE_URL` (reemplaza `[YOUR-PASSWORD]` por la contraseña del proyecto).
 3. Corre:
 
 ```bash
@@ -41,6 +41,16 @@ Todas las tablas se crean **automáticamente** la primera vez que arranca la app
 
 Abre `http://localhost:3000`, regístrate — **el primer usuario registrado es admin automáticamente** — y crea tu primer proyecto.
 
+### Migrar datos existentes a Supabase
+
+Si ya tenías datos en otra base Postgres (p. ej. Neon), cópialos así:
+
+```bash
+SOURCE_DATABASE_URL="postgresql://...origen..." DATABASE_URL="postgresql://...supabase...:5432/postgres" npx tsx scripts/copy-db.ts
+```
+
+El script crea las tablas en Supabase, copia todo en una sola transacción y se detiene si el destino ya tiene datos (añade `--truncate` para vaciarlo antes). Usa el *Session pooler* (5432) para esto, no el *Transaction pooler*.
+
 > Si alguna vez cambias el esquema en `src/db/schema.ts`, corre `npx drizzle-kit generate` para generar el archivo SQL de migración correspondiente en `./drizzle` (ese sí se sube al repo) — las migraciones se siguen aplicando solas al arrancar.
 
 ## Variables de entorno
@@ -50,21 +60,21 @@ Copia `.env.example` a `.env` y ajusta:
 | Variable | Para qué sirve |
 |---|---|
 | `AUTH_SECRET` | Clave para firmar las sesiones. Genera una con `openssl rand -base64 32` y **cámbiala en producción**. |
-| `DATABASE_URL` | Cadena de conexión de tu base de datos Postgres (Neon, Supabase, o cualquier otra). |
+| `DATABASE_URL` | Cadena de conexión de tu base de datos Postgres (Supabase). En servidores propios usa el *Session pooler* (5432); en Vercel/serverless el *Transaction pooler* (6543) — la app desactiva los prepared statements automáticamente en ese caso. |
 | `AUTH_TRUST_HOST` | Ponlo en `true` cuando despliegues en un dominio propio (fuera de `localhost`). No hace falta en Vercel, se detecta solo. |
 
 ## Desplegar "en la nube" (accesible desde cualquier lado)
 
 Como la base de datos vive aparte (Postgres) y no hay archivos en disco, la app en sí puede vivir en **cualquier** hosting — incluyendo los gratis.
 
-### Opción recomendada: Vercel (gratis) + Neon (gratis)
+### Opción recomendada: Vercel (gratis) + Supabase (gratis)
 
-1. Crea la base de datos en [Neon](https://neon.tech) (gratis, sin tarjeta) y copia el connection string.
+1. Crea el proyecto en [Supabase](https://supabase.com) y copia el connection string del **Transaction pooler** (puerto `6543`).
 2. Sube este proyecto a un repositorio de GitHub.
 3. Ve a [vercel.com](https://vercel.com), entra con GitHub, **"Add New" → "Project"** → selecciona tu repo `testmanager`.
 4. En "Environment Variables" agrega:
    - `AUTH_SECRET`: genera una con `openssl rand -base64 32`
-   - `DATABASE_URL`: el connection string de Neon
+   - `DATABASE_URL`: el connection string de Supabase (Transaction pooler)
 5. Click **"Deploy"**. En ~1 minuto te da una URL pública (`https://testmanager-tuusuario.vercel.app`), gratis, sin tarjeta.
 
 > Nota: en el plan gratis de Vercel, la app "duerme" un poco entre visitas si nadie la usa (arranca en 1-2 segundos al primer request), pero para un equipo de QA chico no se nota.
@@ -73,14 +83,14 @@ Como la base de datos vive aparte (Postgres) y no hay archivos en disco, la app 
 
 Todas usan el mismo `Dockerfile` — solo cambia dónde corre:
 
-- **Railway** (~$5/mes): "New Project" → "Deploy from GitHub repo" → agrega la variable `DATABASE_URL` (puedes usar el mismo Neon, o el Postgres que ofrece Railway).
+- **Railway** (~$5/mes): "New Project" → "Deploy from GitHub repo" → agrega la variable `DATABASE_URL` (puedes usar el mismo Supabase, o el Postgres que ofrece Railway).
 - **Render**: en su plan gratis la app se "duerme" tras 15 min sin tráfico igual que Vercel — funciona bien ya que no depende de disco. En el plan pagado (~$7/mes) no se duerme.
 - **Tu propio VPS** (DigitalOcean, Hetzner, etc.):
 
 ```bash
 git clone <tu-repo>
 cd testmanager
-docker compose up -d --build   # incluye un Postgres local si no quieres usar Neon
+docker compose up -d --build   # incluye un Postgres local si no quieres usar Supabase
 ```
 
   Con un dominio + Nginx/Caddy como proxy inverso (para HTTPS), queda accesible en `https://testmanager.tudominio.com`.

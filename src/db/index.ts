@@ -17,7 +17,14 @@ const connectionString = process.env.DATABASE_URL || "";
 // (e.g. for /_not-found), and we don't want the build to require a live
 // database connection. Migrations run separately, once, at real server
 // startup — see src/instrumentation.ts.
-const queryClient = postgres(connectionString, { max: 1 });
+//
+// Supabase's transaction pooler (Supavisor, port 6543) doesn't support
+// prepared statements, so they're disabled when connecting through it.
+const usesTransactionPooler = /:6543\//.test(connectionString);
+const queryClient = postgres(connectionString, {
+  max: 1,
+  prepare: !usesTransactionPooler,
+});
 export const db = drizzle(queryClient, { schema });
 export { schema };
 
