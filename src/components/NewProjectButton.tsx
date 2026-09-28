@@ -9,23 +9,42 @@ export default function NewProjectButton() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    const res = await fetch("/api/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description }),
-    });
-    setLoading(false);
-    if (res.ok) {
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description }),
+      });
+      if (res.status === 401) {
+        setError("Tu sesión expiró. Vuelve a iniciar sesión.");
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "No se pudo crear el proyecto. Intenta de nuevo.");
+        return;
+      }
       const project = await res.json();
       setOpen(false);
       setName("");
       setDescription("");
       router.push(`/projects/${project.id}`);
+    } catch {
+      setError("No se pudo conectar con el servidor. Intenta de nuevo.");
+    } finally {
+      setLoading(false);
     }
+  }
+
+  function close() {
+    setOpen(false);
+    setError("");
   }
 
   return (
@@ -65,10 +84,11 @@ export default function NewProjectButton() {
                   rows={3}
                 />
               </div>
+              {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setOpen(false)}
+                  onClick={close}
                   className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
                 >
                   Cancelar

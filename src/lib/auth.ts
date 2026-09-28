@@ -8,6 +8,28 @@ import { authConfig } from "@/lib/auth.config";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // Server-side only (the edge proxy uses authConfig without this): reload
+    // the user on every request so role changes apply immediately and
+    // sessions of users that no longer exist are signed out.
+    jwt: async ({ token, user }) => {
+      if (user) {
+        token.id = user.id!;
+        token.role = user.role;
+        return token;
+      }
+      if (typeof token.id !== "string") return null;
+      const current = await db.query.users.findFirst({
+        where: eq(users.id, token.id),
+      });
+      if (!current) return null;
+      token.role = current.role;
+      token.name = current.name;
+      token.email = current.email;
+      return token;
+    },
+  },
   providers: [
     Credentials({
       name: "credentials",

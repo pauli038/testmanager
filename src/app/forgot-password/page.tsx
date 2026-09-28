@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
           <p className="text-sm text-slate-600 mt-4">
             El envío de correos no está configurado. Pide a un administrador de
             Test Manager que te genere un enlace de restablecimiento desde{" "}
-            <em>Configuración → Usuarios del sistema</em>.
+            la sección <em>Usuarios</em>.
           </p>
         )}
 
