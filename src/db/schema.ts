@@ -27,6 +27,19 @@ export const usersRelations = relations(users, ({ many }) => ({
   projectMembers: many(projectMembers),
 }));
 
+// ---------- Password reset ----------
+// Only a SHA-256 hash of the token is stored; the raw token lives in the link.
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: id(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  usedAt: text("used_at"),
+  createdAt: createdAt(),
+});
+
 // ---------- Projects ----------
 export const projects = pgTable("projects", {
   id: id(),

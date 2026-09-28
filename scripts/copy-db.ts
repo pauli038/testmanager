@@ -24,6 +24,7 @@ import path from "path";
 // Orden de inserción: cada tabla va después de las que referencia.
 const TABLES = [
   "users",
+  "password_reset_tokens",
   "projects",
   "project_members",
   "test_suites",
@@ -64,9 +65,8 @@ async function main() {
     const existing = await source<{ table_name: string }[]>`
       select table_name from information_schema.tables
       where table_schema = 'public' and table_type = 'BASE TABLE'`;
-    const unknown = existing
-      .map((r) => r.table_name)
-      .filter((t) => !TABLES.includes(t));
+    const sourceTables = existing.map((r) => r.table_name);
+    const unknown = sourceTables.filter((t) => !TABLES.includes(t));
     if (unknown.length) {
       console.warn(`Aviso: tablas en origen que no se copian: ${unknown.join(", ")}`);
     }
@@ -84,6 +84,10 @@ async function main() {
       }
 
       for (const t of TABLES) {
+        if (!sourceTables.includes(t)) {
+          console.log(`  ${t}: no existe en origen, se omite`);
+          continue;
+        }
         let copied = 0;
         const cursor = source.unsafe(`select * from "${t}"`).cursor(BATCH);
         for await (const rows of cursor) {

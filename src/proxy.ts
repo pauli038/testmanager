@@ -9,6 +9,9 @@ export default auth((req) => {
   const isPublic =
     pathname === "/login" ||
     pathname === "/register" ||
+    pathname === "/forgot-password" ||
+    pathname === "/reset-password" ||
+    pathname.startsWith("/api/password-reset") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/register") ||
     pathname.startsWith("/api/ingest"); // playwright ingestion uses api key, not session
