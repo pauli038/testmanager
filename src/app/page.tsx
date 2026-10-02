@@ -5,10 +5,13 @@ import { testRuns, testCases, testSuites } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
 import Link from "next/link";
 import NewProjectButton from "@/components/NewProjectButton";
+import EditProjectButton from "@/components/EditProjectButton";
+import { canManageProject } from "@/lib/permissions";
 
 export default async function HomePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+  const canEdit = canManageProject(session.user.role);
 
   const projects = await db.query.projects.findMany({
     orderBy: (p, { desc }) => [desc(p.createdAt)],
@@ -57,25 +60,33 @@ export default async function HomePage() {
           {projects.map((p) => {
             const s = stats.find((x) => x.projectId === p.id);
             return (
-              <Link
-                key={p.id}
-                href={`/projects/${p.id}`}
-                className="block bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-teal-300 transition"
-              >
-                <h2 className="font-medium text-slate-900">{p.name}</h2>
-                <p className="text-sm text-slate-500 mt-1 line-clamp-2">
-                  {p.description || "Sin descripción"}
-                </p>
-                <div className="flex gap-4 mt-4 text-xs text-slate-500">
-                  <span>🧪 {s?.cases ?? 0} casos</span>
-                  <span>▶️ {s?.runs ?? 0} runs</span>
-                </div>
-                {p.creator?.name && (
-                  <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
-                    Creado por {p.creator.name}
+              <div key={p.id} className="relative">
+                <Link
+                  href={`/projects/${p.id}`}
+                  className="block h-full bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-teal-300 transition"
+                >
+                  <h2 className={`font-medium text-slate-900 ${canEdit ? "pr-8" : ""}`}>{p.name}</h2>
+                  <p className="text-sm text-slate-500 mt-1 line-clamp-2">
+                    {p.description || "Sin descripción"}
                   </p>
+                  <div className="flex gap-4 mt-4 text-xs text-slate-500">
+                    <span>🧪 {s?.cases ?? 0} casos</span>
+                    <span>▶️ {s?.runs ?? 0} runs</span>
+                  </div>
+                  {p.creator?.name && (
+                    <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
+                      Creado por {p.creator.name}
+                    </p>
+                  )}
+                </Link>
+                {canEdit && (
+                  <div className="absolute top-3 right-3">
+                    <EditProjectButton
+                      project={{ id: p.id, name: p.name, description: p.description }}
+                    />
+                  </div>
                 )}
-              </Link>
+              </div>
             );
           })}
         </div>
