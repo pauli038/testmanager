@@ -103,9 +103,12 @@ export default function DefectsList({
   const [open, setOpen] = useState(false);
   const [editingDefect, setEditingDefect] = useState<Defect | null>(null);
   const [viewingDefect, setViewingDefect] = useState<Defect | null>(null);
-  const [viewingImage, setViewingImage] = useState<{ filename: string; url: string } | null>(
+  const [viewingImage, setViewingImage] = useState<(Attachment & { defectId: string }) | null>(
     null
   );
+  const [pendingAttachmentDelete, setPendingAttachmentDelete] = useState<
+    (Attachment & { defectId: string }) | null
+  >(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [severity, setSeverity] = useState("medium");
@@ -254,6 +257,42 @@ export default function DefectsList({
     }
   }
 
+  async function removeAttachment(defectId: string, attachmentId: string) {
+    setPendingAttachmentDelete(null);
+    const res = await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    const strip = (x: Defect) =>
+      x.id === defectId
+        ? { ...x, attachments: x.attachments.filter((a) => a.id !== attachmentId) }
+        : x;
+    setDefects((d) => d.map(strip));
+    setViewingDefect((v) => (v ? strip(v) : v));
+    setViewingImage((img) => (img?.id === attachmentId ? null : img));
+  }
+
+  // Thumbnail that opens the viewer, with a hover ✕ to delete the evidence.
+  function evidenceThumb(defectId: string, a: Attachment, sizeClass: string) {
+    return (
+      <div key={a.id} className={`relative group shrink-0 ${sizeClass}`}>
+        <button
+          type="button"
+          onClick={() => setViewingImage({ ...a, defectId })}
+          className="block w-full h-full rounded-lg border border-slate-200 overflow-hidden"
+        >
+          <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
+        </button>
+        <button
+          type="button"
+          title="Eliminar evidencia"
+          onClick={() => setPendingAttachmentDelete({ ...a, defectId })}
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-500 text-[10px] leading-none shadow-sm flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
   async function downloadReport(format: "docx" | "pdf") {
     setDownloading(format);
     try {
@@ -379,16 +418,7 @@ export default function DefectsList({
                   <div className="flex items-center gap-2 flex-wrap">
                     {d.attachments
                       .filter((a) => !a.retestId)
-                      .map((a) => (
-                        <button
-                          key={a.id}
-                          type="button"
-                          onClick={() => setViewingImage(a)}
-                          className="block w-14 h-14 rounded-lg border border-slate-200 overflow-hidden shrink-0"
-                        >
-                          <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                        </button>
-                      ))}
+                      .map((a) => evidenceThumb(d.id, a, "w-14 h-14"))}
                     <label
                       title="Subir evidencia"
                       className="flex items-center justify-center w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
@@ -778,16 +808,7 @@ export default function DefectsList({
                           <div className="flex items-center gap-2 flex-wrap">
                             {viewingDefect.attachments
                               .filter((a) => a.retestId === r.id)
-                              .map((a) => (
-                                <button
-                                  key={a.id}
-                                  type="button"
-                                  onClick={() => setViewingImage(a)}
-                                  className="block w-12 h-12 rounded border border-slate-200 overflow-hidden shrink-0"
-                                >
-                                  <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                                </button>
-                              ))}
+                              .map((a) => evidenceThumb(viewingDefect.id, a, "w-12 h-12"))}
                             <label
                               title="Subir evidencia del re-test"
                               className="flex items-center justify-center w-12 h-12 rounded border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
@@ -817,16 +838,9 @@ export default function DefectsList({
               <div className="mb-4">
                 <h3 className="text-sm font-medium text-slate-700 mb-2">Evidencia</h3>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {viewingDefect.attachments.map((a) => (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => setViewingImage(a)}
-                      className="block w-16 h-16 rounded border border-slate-200 overflow-hidden"
-                    >
-                      <img src={a.url} alt={a.filename} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
+                  {viewingDefect.attachments.map((a) =>
+                    evidenceThumb(viewingDefect.id, a, "w-16 h-16")
+                  )}
                 </div>
               </div>
             )}
@@ -873,6 +887,12 @@ export default function DefectsList({
                   ⬇ Descargar
                 </a>
                 <button
+                  onClick={() => setPendingAttachmentDelete(viewingImage)}
+                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-red-50 text-red-600 hover:bg-red-100"
+                >
+                  🗑 Eliminar
+                </button>
+                <button
                   onClick={() => setViewingImage(null)}
                   className="text-xs font-medium rounded-lg px-2 py-1 bg-slate-100 text-slate-500 hover:bg-slate-200"
                 >
@@ -896,6 +916,17 @@ export default function DefectsList({
         message="¿Eliminar este defecto?"
         onConfirm={() => pendingDelete && remove(pendingDelete)}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmModal
+        open={pendingAttachmentDelete !== null}
+        title="¿Eliminar evidencia?"
+        message={`Se borrará "${pendingAttachmentDelete?.filename ?? ""}". Esta acción no se puede deshacer.`}
+        onConfirm={() =>
+          pendingAttachmentDelete &&
+          removeAttachment(pendingAttachmentDelete.defectId, pendingAttachmentDelete.id)
+        }
+        onCancel={() => setPendingAttachmentDelete(null)}
       />
     </div>
   );
