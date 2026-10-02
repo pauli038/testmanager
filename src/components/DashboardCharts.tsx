@@ -5,6 +5,8 @@ import {
   ResponsiveContainer,
   ComposedChart,
   LineChart,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
@@ -22,6 +24,15 @@ export type StatusCounts = Record<Status, number>;
 
 export type DashboardData = {
   totalCases: number;
+  completion: {
+    totalCases: number;
+    // Latest result per case; `untested` = never executed.
+    counts: StatusCounts;
+    percent: number;
+    change: number;
+    trend: { day: string; percent: number }[];
+    trendStart: string;
+  };
   totalRuns: number;
   active: {
     count: number;
@@ -108,19 +119,22 @@ export default function DashboardCharts({
   data: DashboardData;
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
-      <div className="space-y-4 min-w-0">
-        <BurndownCard burndown={data.burndown} />
-        <ActivityCard activity={data.activity} />
-        <TestersCard testers={data.testers} />
-      </div>
-      <div className="space-y-4 min-w-0">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ActiveCard active={data.active} openDefects={data.openDefects} totalCases={data.totalCases} />
-          <LatestResultsCard latest={data.latestResults} />
+    <div className="space-y-4">
+      <CompletionCard completion={data.completion} />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="space-y-4 min-w-0">
+          <BurndownCard burndown={data.burndown} />
+          <ActivityCard activity={data.activity} />
+          <TestersCard testers={data.testers} />
         </div>
-        <ActiveRunsCard projectId={projectId} runs={data.activeRuns} />
-        <RunStatusCard counts={data.recentCounts} />
+        <div className="space-y-4 min-w-0">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ActiveCard active={data.active} openDefects={data.openDefects} totalCases={data.totalCases} />
+            <LatestResultsCard latest={data.latestResults} />
+          </div>
+          <ActiveRunsCard projectId={projectId} runs={data.activeRuns} />
+          <RunStatusCard counts={data.recentCounts} />
+        </div>
       </div>
     </div>
   );
@@ -188,6 +202,118 @@ function EmptyState({ text }: { text: string }) {
     <div className="h-40 flex items-center justify-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg text-center px-4">
       {text}
     </div>
+  );
+}
+
+// ---------- Project completion ----------
+const COMPLETION_LABELS: Record<Status, string> = {
+  passed: "Aprobados",
+  failed: "Fallidos",
+  blocked: "Bloqueados",
+  skipped: "Omitidos",
+  untested: "Sin ejecutar",
+};
+
+function CompletionCard({ completion }: { completion: DashboardData["completion"] }) {
+  const { totalCases, counts, percent, change, trend } = completion;
+  if (totalCases === 0) {
+    return (
+      <Card title="Avance del proyecto">
+        <EmptyState text="El proyecto aún no tiene casos de prueba." />
+      </Card>
+    );
+  }
+  return (
+    <Card title="Avance del proyecto">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-center">
+        <div className="lg:w-1/2 min-w-0">
+          <div className="flex items-end gap-3 flex-wrap">
+            <span className="text-4xl font-semibold text-slate-900 leading-none">{percent}%</span>
+            <span className="text-sm text-slate-500 pb-1">
+              completado · {counts.passed} de {totalCases} casos aprobados
+            </span>
+          </div>
+          <p
+            className={`text-xs mt-2 ${
+              change > 0 ? "text-emerald-600" : change < 0 ? "text-red-600" : "text-slate-400"
+            }`}
+          >
+            {change > 0 ? "▲" : change < 0 ? "▼" : "■"} {change > 0 ? "+" : ""}
+            {change} puntos en los últimos 30 días
+          </p>
+          <div className="flex h-3 rounded-full overflow-hidden bg-slate-100 mt-4">
+            {STATUS_ORDER.filter((s) => counts[s]).map((s) => (
+              <span
+                key={s}
+                title={`${COMPLETION_LABELS[s]}: ${counts[s]}`}
+                style={{
+                  width: `${(counts[s] / totalCases) * 100}%`,
+                  backgroundColor: STATUS_COLORS[s],
+                }}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-3 text-xs text-slate-600">
+            {STATUS_ORDER.map((s) => (
+              <span key={s} className="flex items-center gap-1.5">
+                <span
+                  className="w-2.5 h-2.5 rounded-sm"
+                  style={{ backgroundColor: STATUS_COLORS[s] }}
+                />
+                <span className="font-medium text-slate-800">{counts[s]}</span>
+                {COMPLETION_LABELS[s]}
+                <span className="text-slate-400">({pct(counts[s], totalCases)}%)</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-3">
+            Cada caso cuenta con su resultado más reciente en cualquier run.
+          </p>
+        </div>
+        <div className="lg:w-1/2 min-w-0">
+          <p className="text-xs text-slate-500 mb-1">% aprobado del proyecto · últimos 30 días</p>
+          <ResponsiveContainer width="100%" height={150}>
+            <AreaChart data={trend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+              <defs>
+                <linearGradient id="completionFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={STATUS_COLORS.passed} stopOpacity={0.3} />
+                  <stop offset="100%" stopColor={STATUS_COLORS.passed} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid vertical={false} stroke={GRIDLINE} />
+              <XAxis
+                dataKey="day"
+                tickFormatter={shortDay}
+                tick={{ fontSize: 11, fill: INK_SECONDARY }}
+                axisLine={{ stroke: GRIDLINE }}
+                tickLine={false}
+                minTickGap={24}
+              />
+              <YAxis
+                domain={[0, 100]}
+                ticks={[0, 25, 50, 75, 100]}
+                unit="%"
+                tick={{ fontSize: 11, fill: INK_SECONDARY }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: GRIDLINE }}
+                labelFormatter={(k: any) => shortDay(String(k))}
+                formatter={(value: any) => [`${value}%`, "Completado"]}
+              />
+              <Area
+                type="monotone"
+                dataKey="percent"
+                stroke={STATUS_COLORS.passed}
+                strokeWidth={2}
+                fill="url(#completionFill)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </Card>
   );
 }
 

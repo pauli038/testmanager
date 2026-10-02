@@ -1,18 +1,26 @@
 import { db } from "@/db";
 import { testRuns, testRunCases, testCases, testSuites, defects, users } from "@/db/schema";
 import { eq, sql } from "drizzle-orm";
-import DashboardCharts, { type DashboardData, type StatusCounts } from "@/components/DashboardCharts";
+import DashboardCharts, {
+  type DashboardData,
+  type Status,
+  type StatusCounts,
+} from "@/components/DashboardCharts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ACTIVITY_DAYS = 14;
 const MAX_BURNDOWN_DAYS = 60;
 const LATEST_RESULTS = 120;
+const PROGRESS_DAYS = 30;
 
 // Timestamps are stored as text (ISO strings or Postgres `now()` output);
 // the first 10 chars are always the YYYY-MM-DD day.
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 const addDays = (d: Date, n: number) => new Date(d.getTime() + n * DAY_MS);
 const parseDay = (s: string) => new Date(`${s.slice(0, 10)}T00:00:00Z`);
+
+// Percentage with one decimal.
+const pct1 = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
 
 function emptyCounts(): StatusCounts {
   return { untested: 0, passed: 0, failed: 0, blocked: 0, skipped: 0 };
@@ -34,6 +42,7 @@ export default async function ProjectDashboard(props: { params: Promise<{ id: st
     db
       .select({
         runId: testRunCases.runId,
+        caseId: testRunCases.caseId,
         status: testRunCases.status,
         executedAt: testRunCases.executedAt,
         executedBy: testRunCases.executedBy,
@@ -192,13 +201,52 @@ export default async function ProjectDashboard(props: { params: Promise<{ id: st
   }
   const testers = [...testersById.values()].sort((a, b) => b.total - a.total);
 
+  // ---------- Project completion ----------
+  // Each case counts with its most recent result across all runs; the project
+  // is "complete" for a case once that latest result is Passed.
+  const totalCases = Number(caseCountRes[0]?.count ?? 0);
+  const chronological = executed
+    .slice()
+    .sort((a, b) => (a.executedAt! < b.executedAt! ? -1 : 1));
+  const latestByCase = new Map<string, Status>();
+  const progressStart = dayKey(addDays(today, -(PROGRESS_DAYS - 1)));
+  const progressTrend: DashboardData["completion"]["trend"] = [];
+  let idx = 0;
+  const advanceTo = (k: string) => {
+    while (idx < chronological.length && chronological[idx].executedAt!.slice(0, 10) <= k) {
+      latestByCase.set(chronological[idx].caseId, chronological[idx].status);
+      idx++;
+    }
+  };
+  const passedCount = () => [...latestByCase.values()].filter((s) => s === "passed").length;
+  for (let i = PROGRESS_DAYS - 1; i >= 0; i--) {
+    const k = dayKey(addDays(today, -i));
+    advanceTo(k);
+    progressTrend.push({ day: k, percent: pct1(passedCount(), totalCases) });
+  }
+  advanceTo("9999-12-31"); // include anything dated in the future
+
+  const latestCounts = emptyCounts();
+  for (const s of latestByCase.values()) latestCounts[s]++;
+  latestCounts.untested = Math.max(0, totalCases - latestByCase.size);
+  const startPercent = progressTrend[0]?.percent ?? 0;
+  const completion: DashboardData["completion"] = {
+    totalCases,
+    counts: latestCounts,
+    percent: pct1(latestCounts.passed, totalCases),
+    change: Math.round((pct1(latestCounts.passed, totalCases) - startPercent) * 10) / 10,
+    trend: progressTrend,
+    trendStart: progressStart,
+  };
+
   // ---------- Run status (last 10 runs) ----------
   const recentIds = new Set(runs.slice(0, 10).map((r) => r.id));
   const recentCounts = emptyCounts();
   for (const r of rows) if (recentIds.has(r.runId)) recentCounts[r.status]++;
 
   const data: DashboardData = {
-    totalCases: Number(caseCountRes[0]?.count ?? 0),
+    totalCases,
+    completion,
     totalRuns: runs.length,
     active: {
       count: activeRuns.length,
