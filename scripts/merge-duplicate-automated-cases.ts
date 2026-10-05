@@ -50,10 +50,10 @@ async function main() {
       where: inArray(testCases.suiteId, otherSuiteIds),
     });
 
-    // First automated case per normalized title wins as the "keeper".
+    // First case per normalized title wins as the "keeper", preferring one
+    // already flagged as automated.
     const keeperByTitle = new Map<string, (typeof otherCases)[number]>();
-    for (const c of otherCases) {
-      if (!c.automated) continue;
+    for (const c of [...otherCases].sort((a, b) => Number(b.automated) - Number(a.automated))) {
       const key = c.title.trim().toLowerCase();
       if (!keeperByTitle.has(key)) keeperByTitle.set(key, c);
     }
@@ -90,12 +90,10 @@ async function main() {
           .update(defectTestCases)
           .set({ caseId: keeper.id })
           .where(eq(defectTestCases.caseId, dup.id));
-        if (!keeper.automationId && dup.automationId) {
-          await db
-            .update(testCases)
-            .set({ automationId: dup.automationId })
-            .where(eq(testCases.id, keeper.id));
-        }
+        await db
+          .update(testCases)
+          .set({ automated: true, automationId: keeper.automationId ?? dup.automationId })
+          .where(eq(testCases.id, keeper.id));
         await db.delete(testCases).where(eq(testCases.id, dup.id));
       }
 

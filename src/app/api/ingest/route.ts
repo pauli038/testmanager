@@ -109,16 +109,16 @@ export async function POST(req: NextRequest) {
       ),
     });
 
-    // 2) No case has that automationId yet — but if there's already an
-    // automated case with the same title sitting in its real suite (created
-    // by hand, automationId never filled in), reuse it instead of creating
-    // a duplicate in "Automatizado (Playwright)". Backfill its automationId
-    // so future runs match directly via automationId.
+    // 2) No case has that automationId yet — but if there's already a case
+    // with the exact same title sitting in its real suite (created by hand,
+    // automationId never filled in, often not even flagged as automated),
+    // reuse it instead of creating a duplicate in "Automatizado (Playwright)".
+    // Mark it automated and backfill its automationId so future runs match
+    // directly via automationId.
     if (!testCase && normalizedTitle) {
       const titleMatch = await db.query.testCases.findFirst({
         where: and(
           inArray(testCases.suiteId, projectSuiteIds),
-          eq(testCases.automated, true),
           isNull(testCases.automationId),
           sql`lower(trim(${testCases.title})) = ${normalizedTitle}`
         ),
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
       if (titleMatch) {
         [testCase] = await db
           .update(testCases)
-          .set({ automationId: r.automationId })
+          .set({ automated: true, automationId: r.automationId })
           .where(eq(testCases.id, titleMatch.id))
           .returning();
       }
