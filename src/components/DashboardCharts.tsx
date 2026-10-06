@@ -19,6 +19,7 @@ import {
   Tooltip,
   ReferenceLine,
 } from "recharts";
+import { STATUS_COLORS, BLUE, ORANGE, PURPLE } from "@/lib/dashboard-colors";
 
 export type Status = "untested" | "passed" | "failed" | "blocked" | "skipped";
 export type StatusCounts = Record<Status, number>;
@@ -84,14 +85,6 @@ export type DashboardData = {
   recentCounts: StatusCounts;
 };
 
-const STATUS_COLORS: Record<Status, string> = {
-  passed: "#22a55b",
-  failed: "#e5484d",
-  blocked: "#f59e0b",
-  skipped: "#14a3b8",
-  untested: "#cbd5e1",
-};
-
 const STATUS_LABELS: Record<Status, string> = {
   passed: "Passed",
   failed: "Failed",
@@ -102,9 +95,6 @@ const STATUS_LABELS: Record<Status, string> = {
 
 const STATUS_ORDER: Status[] = ["passed", "failed", "blocked", "skipped", "untested"];
 
-const BLUE = "#2a8bd6";
-const ORANGE = "#f39a4c";
-const PURPLE = "#c86fa8";
 const INK_SECONDARY = "#64748b";
 const GRIDLINE = "#e2e8f0";
 const AVATAR_COLORS = ["#0d9488", "#2563eb", "#9333ea", "#db2777", "#ea580c", "#65a30d"];

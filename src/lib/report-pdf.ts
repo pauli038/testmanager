@@ -1,5 +1,6 @@
 import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import type { ReportData } from "./report-data";
+import { chartHeight, drawChart } from "./report-pdf-charts";
 
 const MARGIN = 50;
 const PAGE_WIDTH = 595.28; // A4
@@ -82,7 +83,9 @@ export async function buildReportPdf(data: ReportData): Promise<Uint8Array> {
   const valueColWidth = TABLE_WIDTH - COL_LABEL_WIDTH - CELL_PADDING * 2;
 
   for (const section of data.sections) {
-    ensureSpace(20 + LINE_HEIGHT + ROW_PADDING);
+    // Keep the heading on the same page as whatever follows it.
+    const firstChart = section.charts?.[0];
+    ensureSpace(20 + (firstChart ? chartHeight(firstChart, font, TABLE_WIDTH) : LINE_HEIGHT + ROW_PADDING));
     const headingLines = wrapText(section.heading, boldFont, 13, TABLE_WIDTH);
     for (const line of headingLines) {
       ensureSpace(18);
@@ -90,6 +93,14 @@ export async function buildReportPdf(data: ReportData): Promise<Uint8Array> {
       y -= 18;
     }
     y -= 2;
+
+    for (const chart of section.charts ?? []) {
+      const height = chartHeight(chart, font, TABLE_WIDTH);
+      ensureSpace(height);
+      drawChart({ page, font, boldFont, x: MARGIN, y, width: TABLE_WIDTH, sanitize: sanitizeForPdf }, chart);
+      // The table header is drawn partly above `y`, so leave room for it.
+      y -= height + 22;
+    }
 
     ensureSpace(LINE_HEIGHT + ROW_PADDING);
     page.drawRectangle({

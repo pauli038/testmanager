@@ -3,12 +3,16 @@ import { projects, testSuites, testCases, testRuns, testPlans, testRunCases, def
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getDashboardData } from "./dashboard-data";
 import type { StatusCounts } from "@/components/DashboardCharts";
+import type { ReportChart } from "./report-pdf-charts";
+import { STATUS_COLORS, BLUE, ORANGE, PURPLE } from "./dashboard-colors";
 
 export type ReportImage = { filename: string; mimeType: string; base64: string };
 export type ReportSection = {
   heading: string;
   rows: { label: string; value: string | number }[];
   images?: ReportImage[];
+  // Drawn above the table; only the PDF report renders them.
+  charts?: ReportChart[];
 };
 export type ReportData = { title: string; subtitle: string; sections: ReportSection[]; filenameBase: string };
 
@@ -328,7 +332,16 @@ function countsSummary(c: StatusCounts, includeUntested = true) {
     .join(" · ");
 }
 
-// Same numbers as the project dashboard, laid out as tables for PDF/Word.
+const statusLegend = (includeUntested = true) =>
+  statusRowLabels
+    .filter((s) => includeUntested || s.key !== "untested")
+    .map((s) => ({ label: s.label, color: STATUS_COLORS[s.key] }));
+
+const statusSegments = (c: StatusCounts) =>
+  statusRowLabels.map((s) => ({ value: c[s.key], color: STATUS_COLORS[s.key] }));
+
+// Same numbers as the project dashboard, laid out as tables for PDF/Word;
+// the PDF also draws the dashboard's charts.
 export async function getDashboardReportData(projectId: string): Promise<ReportData> {
   const project = await getProjectOrThrow(projectId);
   const d = await getDashboardData(projectId);
@@ -337,6 +350,24 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
   const sections: ReportSection[] = [
     {
       heading: "Avance del proyecto",
+      charts: [
+        {
+          type: "stackedBars",
+          title: "Último resultado de cada caso",
+          rows: [{ label: `${c.percent}% aprobado`, segments: statusSegments(c.counts) }],
+          legend: statusLegend(),
+        },
+        {
+          type: "lines",
+          title: "Avance en los últimos 30 días",
+          labels: c.trend.map((t) => t.day),
+          series: [
+            { label: "% de casos aprobados", color: STATUS_COLORS.passed, values: c.trend.map((t) => t.percent), area: true },
+          ],
+          yMax: 100,
+          ySuffix: "%",
+        },
+      ],
       rows: [
         { label: "Test cases", value: c.totalCases },
         { label: "Avance (casos aprobados)", value: `${c.percent}%` },
@@ -361,6 +392,18 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
     const b = d.burndown;
     sections.push({
       heading: "Proyección de runs activos",
+      charts: [
+        {
+          type: "lines",
+          title: "Casos pendientes y proyección",
+          labels: b.points.map((p) => p.day),
+          bars: { label: "Ejecutados por día", color: STATUS_COLORS.passed, values: b.points.map((p) => p.executed) },
+          series: [
+            { label: "Proyección", color: BLUE, values: b.points.map((p) => p.forecast), dashed: true },
+            { label: "Pendientes", color: ORANGE, values: b.points.map((p) => p.remaining) },
+          ],
+        },
+      ],
       rows: [
         { label: "Casos en runs activos", value: b.total },
         { label: "Casos pendientes", value: b.pending },
@@ -376,6 +419,16 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
 
   sections.push({
     heading: "Runs activos",
+    charts: d.activeRuns.length
+      ? [
+          {
+            type: "stackedBars",
+            title: "Resultados por run",
+            rows: d.activeRuns.map((r) => ({ label: r.name, segments: statusSegments(r.counts) })),
+            legend: statusLegend(),
+          },
+        ]
+      : undefined,
     rows: d.activeRuns.length
       ? d.activeRuns.map((r) => ({
           label: r.name,
@@ -392,6 +445,16 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
 
   sections.push({
     heading: "Quién ejecutó los tests",
+    charts: d.testers.length
+      ? [
+          {
+            type: "stackedBars",
+            title: "Tests ejecutados por persona",
+            rows: d.testers.map((t) => ({ label: t.name, segments: statusSegments(t.counts) })),
+            legend: statusLegend(false),
+          },
+        ]
+      : undefined,
     rows: d.testers.length
       ? d.testers.map((t) => ({
           label: t.name,
@@ -406,6 +469,23 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
 
   sections.push({
     heading: `Actividad de los últimos 14 días (desde ${formatDay(d.activityStart)})`,
+    charts: [
+      {
+        type: "lines",
+        title: "Cambios por día",
+        labels: d.activity.map((a) => a.day),
+        series: [
+          ...statusRowLabels
+            .filter((s) => s.key !== "untested")
+            .map((s) => ({
+              label: s.label,
+              color: STATUS_COLORS[s.key],
+              values: d.activity.map((a) => a[s.key as Exclude<keyof StatusCounts, "untested">]),
+            })),
+          { label: "Defectos", color: PURPLE, values: d.activity.map((a) => a.defects) },
+        ],
+      },
+    ],
     rows: d.activity.map((a) => ({
       label: formatDay(a.day),
       value: `Aprobados: ${a.passed} · Fallidos: ${a.failed} · Bloqueados: ${a.blocked} · Omitidos: ${a.skipped} · Defectos: ${a.defects}`,
@@ -416,6 +496,16 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
   for (const s of d.latestResults.statuses) latestCounts[s]++;
   sections.push({
     heading: "Últimos resultados",
+    charts: d.latestResults.statuses.length
+      ? [
+          {
+            type: "squares",
+            title: "Del más reciente al más antiguo",
+            colors: d.latestResults.statuses.map((s) => STATUS_COLORS[s]),
+            legend: statusLegend(false),
+          },
+        ]
+      : undefined,
     rows: [
       { label: "Resultados considerados", value: d.latestResults.statuses.length },
       {
@@ -431,6 +521,13 @@ export async function getDashboardReportData(projectId: string): Promise<ReportD
 
   sections.push({
     heading: "Estado de los últimos 10 runs",
+    charts: [
+      {
+        type: "donut",
+        title: "Casos por estado",
+        slices: statusRowLabels.map((s) => ({ label: s.label, value: d.recentCounts[s.key], color: STATUS_COLORS[s.key] })),
+      },
+    ],
     rows: statusRowLabels.map((s) => ({ label: s.label, value: d.recentCounts[s.key] })),
   });
 
