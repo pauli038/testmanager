@@ -219,7 +219,7 @@ export async function getGeneralReportData(projectId: string): Promise<ReportDat
 export async function getDefectsReportData(
   projectId: string,
   date?: string,
-  defectId?: string
+  defectIds: string[] = []
 ): Promise<ReportData> {
   const project = await getProjectOrThrow(projectId);
 
@@ -228,9 +228,9 @@ export async function getDefectsReportData(
     attachments: { columns: { filename: true, mimeType: true, data: true } },
   } as const;
 
-  const rows = defectId
+  const rows = defectIds.length
     ? await db.query.defects.findMany({
-        where: and(eq(defects.projectId, projectId), eq(defects.id, defectId)),
+        where: and(eq(defects.projectId, projectId), inArray(defects.id, defectIds)),
         orderBy: (d, { desc }) => [desc(d.createdAt)],
         with: attachmentsWith,
       })
@@ -294,14 +294,21 @@ export async function getDefectsReportData(
   });
 
   const safeName = project.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-  const subtitle = defectId
-    ? `Defecto: ${rows[0]?.title || "—"} · Generado: ${new Date().toLocaleString("es-ES")}`
-    : date
-    ? `Fecha: ${date}`
-    : `Todos los defectos · Generado: ${new Date().toLocaleString("es-ES")}`;
-  const filenameBase = defectId
-    ? `reporte-defecto-${rows[0]?.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || defectId}`
-    : date
+  const generated = `Generado: ${new Date().toLocaleString("es-ES")}`;
+  const subtitle =
+    defectIds.length === 1
+      ? `Defecto: ${rows[0]?.title || "—"} · ${generated}`
+      : defectIds.length > 1
+      ? `${rows.length} defectos seleccionados · ${generated}`
+      : date
+      ? `Fecha: ${date}`
+      : `Todos los defectos · ${generated}`;
+  const filenameBase =
+    defectIds.length === 1
+      ? `reporte-defecto-${rows[0]?.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || defectIds[0]}`
+      : defectIds.length > 1
+      ? `reporte-defectos-seleccionados-${safeName}`
+      : date
     ? `reporte-defectos-${date}`
     : `reporte-defectos-${safeName}`;
 

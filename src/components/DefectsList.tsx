@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 
 type CaseRef = { id: string; title: string };
@@ -120,7 +120,23 @@ export default function DefectsList({
   const [detectedAt, setDetectedAt] = useState(todayStr());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState("");
-  const [reportDefectId, setReportDefectId] = useState("");
+  const [reportDefectIds, setReportDefectIds] = useState<string[]>([]);
+  const [reportPickerOpen, setReportPickerOpen] = useState(false);
+  const reportPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close the report picker when clicking outside it.
+  useEffect(() => {
+    if (!reportPickerOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!reportPickerRef.current?.contains(e.target as Node)) setReportPickerOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [reportPickerOpen]);
+
+  function toggleReportDefect(id: string) {
+    setReportDefectIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  }
   const [downloading, setDownloading] = useState<"docx" | "pdf" | null>(null);
 
   function openNew() {
@@ -233,6 +249,7 @@ export default function DefectsList({
   async function remove(id: string) {
     await fetch(`/api/defects/${id}`, { method: "DELETE" });
     setDefects((d) => d.filter((x) => x.id !== id));
+    setReportDefectIds((ids) => ids.filter((x) => x !== id));
     setPendingDelete(null);
   }
 
@@ -297,8 +314,8 @@ export default function DefectsList({
     setDownloading(format);
     try {
       const base = `/api/projects/${projectId}/reports/defects`;
-      const filterParam = reportDefectId
-        ? `&defectId=${reportDefectId}`
+      const filterParam = reportDefectIds.length
+        ? reportDefectIds.map((id) => `&defectId=${encodeURIComponent(id)}`).join("")
         : dateFilter
         ? `&date=${dateFilter}`
         : "";
@@ -350,19 +367,52 @@ export default function DefectsList({
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={reportDefectId}
-            onChange={(e) => setReportDefectId(e.target.value)}
-            title="Alcance del reporte de defectos"
-            className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-600 max-w-[220px]"
-          >
-            <option value="">Todos los defectos</option>
-            {defects.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.title}
-              </option>
-            ))}
-          </select>
+          <div ref={reportPickerRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setReportPickerOpen((o) => !o)}
+              title="Alcance del reporte de defectos"
+              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 max-w-[220px]"
+            >
+              <span className="truncate">
+                {reportDefectIds.length === 0
+                  ? "Todos los defectos"
+                  : reportDefectIds.length === 1
+                  ? defects.find((d) => d.id === reportDefectIds[0])?.title ?? "1 defecto"
+                  : `${reportDefectIds.length} defectos seleccionados`}
+              </span>
+              <span className="text-slate-400">▾</span>
+            </button>
+            {reportPickerOpen && (
+              <div className="absolute right-0 z-20 mt-1 w-[min(32rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => setReportDefectIds([])}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-50 ${
+                    reportDefectIds.length === 0 ? "font-medium text-teal-700" : "text-slate-700"
+                  }`}
+                >
+                  <input type="checkbox" readOnly checked={reportDefectIds.length === 0} className="accent-teal-600" />
+                  Todos los defectos
+                </button>
+                <div className="my-1 border-t border-slate-100" />
+                {defects.map((d) => (
+                  <label
+                    key={d.id}
+                    className="flex cursor-pointer items-start gap-2 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={reportDefectIds.includes(d.id)}
+                      onChange={() => toggleReportDefect(d.id)}
+                      className="mt-0.5 accent-teal-600"
+                    />
+                    <span>{d.title}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => downloadReport("docx")}
             disabled={downloading !== null}
