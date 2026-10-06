@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ResponsiveContainer,
@@ -120,6 +121,7 @@ export default function DashboardCharts({
 }) {
   return (
     <div className="space-y-4">
+      <ReportDownload projectId={projectId} />
       <CompletionCard completion={data.completion} />
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="space-y-4 min-w-0">
@@ -213,6 +215,56 @@ const COMPLETION_LABELS: Record<Status, string> = {
   skipped: "Omitidos",
   untested: "Sin ejecutar",
 };
+
+type ReportFormat = "docx" | "pdf";
+
+function ReportDownload({ projectId }: { projectId: string }) {
+  const [downloading, setDownloading] = useState<ReportFormat | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  async function download(format: ReportFormat) {
+    setDownloading(format);
+    setErrorMsg(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/reports/dashboard?format=${format}`);
+      if (!res.ok) {
+        setErrorMsg("No se pudo generar el informe.");
+        return;
+      }
+      const blob = await res.blob();
+      const match = (res.headers.get("Content-Disposition") || "").match(/filename="(.+?)"/);
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = match?.[1] || `informe-dashboard.${format}`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-2 flex-wrap">
+      {errorMsg && <p className="text-sm text-red-600 mr-auto">{errorMsg}</p>}
+      <span className="text-sm text-slate-500">Descargar informe:</span>
+      <button
+        onClick={() => download("docx")}
+        disabled={downloading !== null}
+        className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50"
+      >
+        {downloading === "docx" ? "Generando..." : "⬇ Word"}
+      </button>
+      <button
+        onClick={() => download("pdf")}
+        disabled={downloading !== null}
+        className="rounded-lg bg-slate-700 text-white text-sm font-medium px-3 py-1.5 hover:bg-slate-800 disabled:opacity-50"
+      >
+        {downloading === "pdf" ? "Generando..." : "⬇ PDF"}
+      </button>
+    </div>
+  );
+}
 
 function CompletionCard({ completion }: { completion: DashboardData["completion"] }) {
   const { totalCases, counts, percent, change, trend } = completion;

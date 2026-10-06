@@ -1,6 +1,8 @@
 import { db } from "@/db";
 import { projects, testSuites, testCases, testRuns, testPlans, testRunCases, defects } from "@/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { getDashboardData } from "./dashboard-data";
+import type { StatusCounts } from "@/components/DashboardCharts";
 
 export type ReportImage = { filename: string; mimeType: string; base64: string };
 export type ReportSection = {
@@ -306,5 +308,137 @@ export async function getDefectsReportData(
       ? sections
       : [{ heading: "Sin defectos", rows: [{ label: "Resultado", value: "No hay defectos que coincidan" }] }],
     filenameBase,
+  };
+}
+
+const statusRowLabels: { key: keyof StatusCounts; label: string }[] = [
+  { key: "passed", label: "Aprobados" },
+  { key: "failed", label: "Fallidos" },
+  { key: "blocked", label: "Bloqueados" },
+  { key: "skipped", label: "Omitidos" },
+  { key: "untested", label: "Sin ejecutar" },
+];
+
+const formatDay = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`;
+
+function countsSummary(c: StatusCounts, includeUntested = true) {
+  return statusRowLabels
+    .filter((s) => includeUntested || s.key !== "untested")
+    .map((s) => `${s.label}: ${c[s.key]}`)
+    .join(" · ");
+}
+
+// Same numbers as the project dashboard, laid out as tables for PDF/Word.
+export async function getDashboardReportData(projectId: string): Promise<ReportData> {
+  const project = await getProjectOrThrow(projectId);
+  const d = await getDashboardData(projectId);
+  const c = d.completion;
+
+  const sections: ReportSection[] = [
+    {
+      heading: "Avance del proyecto",
+      rows: [
+        { label: "Test cases", value: c.totalCases },
+        { label: "Avance (casos aprobados)", value: `${c.percent}%` },
+        { label: "Cambio en los últimos 30 días", value: `${c.change > 0 ? "+" : ""}${c.change} puntos` },
+        ...statusRowLabels.map((s) => ({ label: `Último resultado: ${s.label.toLowerCase()}`, value: c.counts[s.key] })),
+      ],
+    },
+    {
+      heading: "Resumen",
+      rows: [
+        { label: "Test runs", value: d.totalRuns },
+        { label: "Runs activos", value: d.active.count },
+        { label: "Runs activos sin iniciar", value: d.active.notStarted },
+        { label: "Casos pendientes en runs activos", value: d.active.pending },
+        { label: "Personas ejecutando en runs activos", value: d.active.contributors },
+        { label: "Defectos abiertos", value: d.openDefects },
+      ],
+    },
+  ];
+
+  if (d.burndown) {
+    const b = d.burndown;
+    sections.push({
+      heading: "Proyección de runs activos",
+      rows: [
+        { label: "Casos en runs activos", value: b.total },
+        { label: "Casos pendientes", value: b.pending },
+        { label: "Velocidad (casos por día)", value: b.velocity },
+        {
+          label: "Fecha estimada de finalización",
+          value: b.pending === 0 ? "Completado" : b.forecastDay ? formatDay(b.forecastDay) : "Sin datos suficientes",
+        },
+        { label: "Días restantes estimados", value: b.daysLeft ?? "—" },
+      ],
+    });
+  }
+
+  sections.push({
+    heading: "Runs activos",
+    rows: d.activeRuns.length
+      ? d.activeRuns.map((r) => ({
+          label: r.name,
+          value: [
+            `${r.total - r.counts.untested}/${r.total} ejecutados (${
+              r.total > 0 ? Math.round(((r.total - r.counts.untested) / r.total) * 100) : 0
+            }%)`,
+            countsSummary(r.counts, false),
+            `Ejecutado por: ${r.contributors.length ? r.contributors.join(", ") : "—"}`,
+          ].join("\n"),
+        }))
+      : [{ label: "Runs activos", value: "No hay runs activos" }],
+  });
+
+  sections.push({
+    heading: "Quién ejecutó los tests",
+    rows: d.testers.length
+      ? d.testers.map((t) => ({
+          label: t.name,
+          value: [
+            `Total: ${t.total} · Últimos 14 días: ${t.recent}`,
+            countsSummary(t.counts, false),
+            `Última ejecución: ${formatDay(t.lastAt)}`,
+          ].join("\n"),
+        }))
+      : [{ label: "Ejecuciones", value: "Todavía no hay tests ejecutados" }],
+  });
+
+  sections.push({
+    heading: `Actividad de los últimos 14 días (desde ${formatDay(d.activityStart)})`,
+    rows: d.activity.map((a) => ({
+      label: formatDay(a.day),
+      value: `Aprobados: ${a.passed} · Fallidos: ${a.failed} · Bloqueados: ${a.blocked} · Omitidos: ${a.skipped} · Defectos: ${a.defects}`,
+    })),
+  });
+
+  const latestCounts: StatusCounts = { untested: 0, passed: 0, failed: 0, blocked: 0, skipped: 0 };
+  for (const s of d.latestResults.statuses) latestCounts[s]++;
+  sections.push({
+    heading: "Últimos resultados",
+    rows: [
+      { label: "Resultados considerados", value: d.latestResults.statuses.length },
+      {
+        label: "Período",
+        value:
+          d.latestResults.from && d.latestResults.to
+            ? `${formatDay(d.latestResults.from)} - ${formatDay(d.latestResults.to)}`
+            : "—",
+      },
+      ...statusRowLabels.filter((s) => s.key !== "untested").map((s) => ({ label: s.label, value: latestCounts[s.key] })),
+    ],
+  });
+
+  sections.push({
+    heading: "Estado de los últimos 10 runs",
+    rows: statusRowLabels.map((s) => ({ label: s.label, value: d.recentCounts[s.key] })),
+  });
+
+  const safeName = project.name.trim().replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  return {
+    title: `Informe del dashboard - ${project.name}`,
+    subtitle: `Generado: ${new Date().toLocaleString("es-ES")}`,
+    sections,
+    filenameBase: `informe-dashboard-${safeName}`,
   };
 }
