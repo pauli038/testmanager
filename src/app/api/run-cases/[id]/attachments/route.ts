@@ -4,9 +4,9 @@ import { attachments } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
 
 // Evidence is stored inline in the database (base64), so limits stay modest —
-// videos are capped at 60s client-side, which keeps them well under this size.
+// videos are capped at 200s client-side, which keeps them well under this size.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100MB
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200MB
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { error } = await requireUser();
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
   if (file.size > maxBytes) {
     return NextResponse.json(
-      { error: `El archivo es muy grande (máximo ${isVideo ? "100MB" : "5MB"})` },
+      { error: `El archivo es muy grande (máximo ${isVideo ? "200MB" : "5MB"})` },
       { status: 413 }
     );
   }

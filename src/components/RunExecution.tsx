@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 import ReportDefectModal from "./ReportDefectModal";
 
-const MAX_VIDEO_SECONDS = 60;
+const MAX_VIDEO_SECONDS = 200;
 // Above this size, upload in chunks instead of one request — some proxies
 // (e.g. VS Code Dev Tunnels) reject large single-request bodies with a 413.
 const CHUNK_THRESHOLD_BYTES = 4 * 1024 * 1024; // 4MB
@@ -456,7 +456,7 @@ export default function RunExecution({
                         );
                       })}
                       <label
-                        title="Subir evidencia (imagen o video, máx. 60s)"
+                        title="Subir evidencia (imagen o video, máx. 200s)"
                         className="flex items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
                       >
                         <span className="text-xl leading-none">+</span>
