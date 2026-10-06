@@ -3,7 +3,7 @@ import { projects, testSuites, testCases, testRuns, testPlans, testRunCases, def
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getDashboardData } from "./dashboard-data";
 import type { StatusCounts } from "@/components/DashboardCharts";
-import type { ReportChart } from "./report-pdf-charts";
+import type { ReportChart } from "./report-charts";
 import { STATUS_COLORS, BLUE, ORANGE, PURPLE } from "./dashboard-colors";
 
 export type ReportImage = { filename: string; mimeType: string; base64: string };
@@ -11,7 +11,7 @@ export type ReportSection = {
   heading: string;
   rows: { label: string; value: string | number }[];
   images?: ReportImage[];
-  // Drawn above the table; only the PDF report renders them.
+  // Drawn above the table.
   charts?: ReportChart[];
 };
 export type ReportData = { title: string; subtitle: string; sections: ReportSection[]; filenameBase: string };

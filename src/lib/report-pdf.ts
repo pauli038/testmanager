@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, StandardFonts, rgb } from "pdf-lib";
 import type { ReportData } from "./report-data";
-import { chartHeight, drawChart } from "./report-pdf-charts";
+import { chartHeight, drawChart, sanitizeForPdf } from "./report-charts";
 
 const MARGIN = 50;
 const PAGE_WIDTH = 595.28; // A4
@@ -17,21 +17,6 @@ const TEAL = rgb(0.02, 0.44, 0.42);
 const TEAL_LIGHT = rgb(0.91, 0.96, 0.95);
 const TEXT = rgb(0.15, 0.2, 0.25);
 const MUTED = rgb(0.45, 0.5, 0.55);
-
-// The standard PDF fonts only support WinAnsi encoding — arrows, emoji, and
-// other characters outside Latin-1 throw at draw time. Normalize the common
-// ones and drop anything else rather than let the whole report fail.
-function sanitizeForPdf(text: string): string {
-  return String(text)
-    .replace(/[→⇒➤]/g, "->")
-    .replace(/[←⇐]/g, "<-")
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[–—]/g, "-")
-    .replace(/…/g, "...")
-    .replace(/•/g, "-")
-    .replace(/[^\x00-\xFF]/g, "");
-}
 
 // pdf-lib doesn't expose its internal word-wrap helper, so lines are wrapped
 // manually — needed to compute each row's height before drawing it.
@@ -97,7 +82,7 @@ export async function buildReportPdf(data: ReportData): Promise<Uint8Array> {
     for (const chart of section.charts ?? []) {
       const height = chartHeight(chart, font, TABLE_WIDTH);
       ensureSpace(height);
-      drawChart({ page, font, boldFont, x: MARGIN, y, width: TABLE_WIDTH, sanitize: sanitizeForPdf }, chart);
+      drawChart({ page, font, boldFont, x: MARGIN, y, width: TABLE_WIDTH }, chart);
       // The table header is drawn partly above `y`, so leave room for it.
       y -= height + 22;
     }

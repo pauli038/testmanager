@@ -11,6 +11,7 @@ import {
   ImageRun,
 } from "docx";
 import type { ReportData, ReportImage } from "./report-data";
+import { chartToSvg, type ReportChart } from "./report-charts";
 
 const MAX_IMG_WIDTH = 500;
 const MAX_IMG_HEIGHT = 380;
@@ -120,7 +121,46 @@ function statsTable(rows: { label: string; value: string | number }[]): Table {
   return new Table({ rows: [headerRow, ...dataRows], width: { size: 100, type: WidthType.PERCENTAGE } });
 }
 
-export function buildReportDocx(data: ReportData): Document {
+// Charts are laid out at the PDF's content width (in points) and scaled to
+// roughly the width of a Word page's text area (in pixels).
+const CHART_LAYOUT_WIDTH = 495;
+const CHART_DISPLAY_WIDTH = 600;
+
+// 1×1 transparent PNG, used if the fallback image can't be rendered.
+const BLANK_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64"
+);
+
+// Word shows the SVG (drawn with its own fonts); the PNG is only for older
+// versions without SVG support.
+async function svgToPng(svg: string, scale: number): Promise<Buffer> {
+  try {
+    const sharp = (await import("sharp")).default;
+    return await sharp(Buffer.from(svg), { density: 72 * scale * 2 }).png().toBuffer();
+  } catch (err) {
+    console.error("Failed to render chart fallback PNG:", err);
+    return BLANK_PNG;
+  }
+}
+
+async function chartParagraph(chart: ReportChart): Promise<Paragraph> {
+  const { svg, width, height } = chartToSvg(chart, CHART_LAYOUT_WIDTH);
+  const scale = CHART_DISPLAY_WIDTH / width;
+  return new Paragraph({
+    children: [
+      new ImageRun({
+        type: "svg",
+        data: Buffer.from(svg),
+        transformation: { width: CHART_DISPLAY_WIDTH, height: Math.round(height * scale) },
+        fallback: { type: "png", data: await svgToPng(svg, scale) },
+      }),
+    ],
+    spacing: { after: 200 },
+  });
+}
+
+export async function buildReportDocx(data: ReportData): Promise<Document> {
   const children: (Paragraph | Table)[] = [
     new Paragraph({ text: data.title, heading: HeadingLevel.HEADING_1 }),
     new Paragraph({ text: data.subtitle, spacing: { after: 300 } }),
@@ -129,6 +169,7 @@ export function buildReportDocx(data: ReportData): Document {
     children.push(
       new Paragraph({ text: s.heading, heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 150 } })
     );
+    children.push(...(await Promise.all((s.charts ?? []).map(chartParagraph))));
     children.push(statsTable(s.rows));
     if (s.images?.length) {
       children.push(

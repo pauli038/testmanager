@@ -30,7 +30,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     });
   }
 
-  const buffer = await docToBuffer(buildReportDocx(data));
+  const buffer = await docToBuffer(await buildReportDocx(data));
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
     headers: {
