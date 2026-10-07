@@ -8,6 +8,7 @@ import {
   FileText,
   FlaskConical,
   LayoutDashboard,
+  Network,
   PlayCircle,
   Settings,
 } from "lucide-react";
@@ -21,6 +22,7 @@ export default function ProjectTabs({ projectId }: { projectId: string }) {
     { href: `${base}/suites`, label: "Casos de prueba", icon: FlaskConical },
     { href: `${base}/plans`, label: "Planes", icon: ClipboardList },
     { href: `${base}/runs`, label: "Runs", icon: PlayCircle },
+    { href: `${base}/traceability`, label: "Trazabilidad", icon: Network },
     { href: `${base}/defects`, label: "Defectos", icon: Bug },
     { href: `${base}/reports`, label: "Reportes", icon: FileText },
     { href: `${base}/settings`, label: "Ajustes", icon: Settings },
