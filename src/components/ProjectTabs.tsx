@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   Bug,
   ClipboardList,
   FileText,
@@ -23,6 +24,7 @@ export default function ProjectTabs({ projectId }: { projectId: string }) {
     { href: `${base}/plans`, label: "Planes", icon: ClipboardList },
     { href: `${base}/runs`, label: "Runs", icon: PlayCircle },
     { href: `${base}/traceability`, label: "Trazabilidad", icon: Network },
+    { href: `${base}/stability`, label: "Estabilidad", icon: Activity },
     { href: `${base}/defects`, label: "Defectos", icon: Bug },
     { href: `${base}/reports`, label: "Reportes", icon: FileText },
     { href: `${base}/settings`, label: "Ajustes", icon: Settings },
