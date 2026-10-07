@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 
 const id = () =>
@@ -150,6 +150,25 @@ export const testCasesRelations = relations(testCases, ({ one, many }) => ({
   runCases: many(testRunCases),
   defectLinks: many(defectTestCases),
 }));
+
+// ---------- Requirements ----------
+// The project's list of requirements (RF-001, RNF-005, CAT…), loaded from
+// the client's requirements document. Cases link to a requirement through
+// their code (TC-RF020-06 → RF-020); a requirement here with no cases shows
+// up in the traceability matrix as "Sin cobertura".
+export const requirements = pgTable(
+  "requirements",
+  {
+    id: id(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    key: text("key").notNull(), // normalized, e.g. "RF-020"
+    title: text("title"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("requirements_project_key_unique").on(t.projectId, t.key)]
+);
 
 // ---------- Case Kanban Columns ----------
 // Per-project, user-editable phases representing the QA cycle (e.g.

@@ -2,8 +2,12 @@
 
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  ListPlus,
+  ShieldQuestion,
+  Trash2,
   Bug,
   ChevronRight,
   CircleCheck,
@@ -25,7 +29,11 @@ import {
   Segmented,
   StatusBadge,
   cn,
+  errorMessage,
+  useToast,
 } from "@/components/ui";
+import ConfirmModal from "./ConfirmModal";
+import RequirementsImportModal from "./RequirementsImportModal";
 import { STATUS_COLORS } from "@/lib/dashboard-colors";
 import type {
   CaseStatus,
@@ -37,8 +45,9 @@ import type {
 
 const HEALTH_META: Record<
   RequirementHealth,
-  { label: string; tone: "danger" | "success" | "info" | "neutral"; icon: typeof CircleCheck }
+  { label: string; tone: "danger" | "success" | "info" | "neutral" | "warning"; icon: typeof CircleCheck }
 > = {
+  uncovered: { label: "Sin cobertura", tone: "warning", icon: ShieldQuestion },
   at_risk: { label: "En riesgo", tone: "danger", icon: AlertTriangle },
   in_progress: { label: "En progreso", tone: "info", icon: Loader },
   not_run: { label: "Sin ejecutar", tone: "neutral", icon: CircleDashed },
@@ -92,6 +101,7 @@ function csvCell(v: string | number) {
 function downloadCsv(projectName: string, data: TraceabilityData) {
   const header = [
     "Requisito",
+    "Descripción del requisito",
     "Estado del requisito",
     "Código",
     "Caso",
@@ -101,8 +111,9 @@ function downloadCsv(projectName: string, data: TraceabilityData) {
     "Automatizado",
     "Defectos abiertos",
   ];
-  const caseRow = (req: string, health: string, c: TraceCase) => [
+  const caseRow = (req: string, title: string, health: string, c: TraceCase) => [
     req,
+    title,
     health,
     c.code ?? "",
     c.title,
@@ -115,9 +126,11 @@ function downloadCsv(projectName: string, data: TraceabilityData) {
   const rows = [
     header,
     ...data.requirements.flatMap((r) =>
-      r.cases.map((c) => caseRow(r.key, HEALTH_META[r.health].label, c))
+      r.cases.length
+        ? r.cases.map((c) => caseRow(r.key, r.title ?? "", HEALTH_META[r.health].label, c))
+        : [[r.key, r.title ?? "", HEALTH_META[r.health].label, "", "", "", "", "", "", ""]]
     ),
-    ...data.unassigned.map((c) => caseRow("(sin requisito)", "", c)),
+    ...data.unassigned.map((c) => caseRow("(sin requisito)", "", "", c)),
   ];
   // BOM so Excel opens the accents correctly.
   const csv = "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
@@ -174,9 +187,26 @@ export default function TraceabilityMatrix({
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showUnassigned, setShowUnassigned] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<Requirement | null>(null);
+  const router = useRouter();
+  const toast = useToast();
+
+  async function removeRequirement(r: Requirement) {
+    setPendingRemove(null);
+    if (!r.id) return;
+    const res = await fetch(`/api/requirements/${r.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo quitar el requisito"));
+      return;
+    }
+    toast.success(`${r.key} quitado de la lista`);
+    router.refresh();
+  }
 
   const healthCounts = useMemo(() => {
     const counts: Record<RequirementHealth, number> = {
+      uncovered: 0,
       at_risk: 0,
       in_progress: 0,
       not_run: 0,
@@ -200,7 +230,7 @@ export default function TraceabilityMatrix({
     const out: { req: Requirement; cases: TraceCase[] }[] = [];
     for (const r of data.requirements) {
       if (filter !== "all" && r.health !== filter) continue;
-      if (!q || matches(r.key, q)) {
+      if (!q || matches(r.key, q) || (r.title && matches(r.title, q))) {
         out.push({ req: r, cases: r.cases });
         continue;
       }
@@ -219,13 +249,25 @@ export default function TraceabilityMatrix({
     });
   }
 
+  const importModal = importOpen && (
+    <RequirementsImportModal projectId={projectId} onClose={() => setImportOpen(false)} />
+  );
+
   if (data.requirements.length === 0 && data.unassigned.length === 0) {
     return (
-      <EmptyState
-        icon={Network}
-        title="Todavía no hay casos de prueba"
-        description="La matriz agrupa los casos por requisito a partir de su código (ej. TC-RF020-06 → RF-020)."
-      />
+      <>
+        <EmptyState
+          icon={Network}
+          title="Todavía no hay casos ni requisitos"
+          description="La matriz agrupa los casos por requisito a partir de su código (ej. TC-RF020-06 → RF-020). Puedes empezar cargando la lista de requisitos del proyecto."
+          action={
+            <Button icon={ListPlus} size="sm" onClick={() => setImportOpen(true)}>
+              Cargar requisitos
+            </Button>
+          }
+        />
+        {importModal}
+      </>
     );
   }
 
@@ -241,17 +283,37 @@ export default function TraceabilityMatrix({
             del código del caso: <span className="font-mono text-xs">TC-RF020-06</span> → RF-020.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={Download}
-          onClick={() => downloadCsv(projectName, data)}
-        >
-          Exportar CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" icon={ListPlus} onClick={() => setImportOpen(true)}>
+            Cargar requisitos
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Download}
+            onClick={() => downloadCsv(projectName, data)}
+          >
+            Exportar CSV
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      {!data.hasCatalog && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="flex items-start gap-2 text-sm text-amber-900">
+            <ShieldQuestion size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
+            <span>
+              Por ahora solo ves los requisitos que ya tienen casos. Carga la lista completa de
+              requisitos para descubrir los que <strong>nadie ha probado</strong>.
+            </span>
+          </p>
+          <Button size="sm" icon={ListPlus} onClick={() => setImportOpen(true)}>
+            Cargar requisitos
+          </Button>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Card className="!p-4">
           <p className="text-xs text-slate-500">Requisitos</p>
           <p className="text-2xl font-semibold tabular-nums text-slate-900 mt-1">
@@ -259,7 +321,10 @@ export default function TraceabilityMatrix({
           </p>
           <p className="text-xs text-slate-400 mt-0.5">{totals.cases} casos vinculados</p>
         </Card>
-        {(["at_risk", "in_progress", "not_run", "covered"] as const).map((h) => {
+        {(data.hasCatalog
+          ? (["uncovered", "at_risk", "in_progress", "not_run", "covered"] as const)
+          : (["at_risk", "in_progress", "not_run", "covered"] as const)
+        ).map((h) => {
           const meta = HEALTH_META[h];
           const active = filter === h;
           return (
@@ -279,6 +344,7 @@ export default function TraceabilityMatrix({
                   aria-hidden
                   className={cn(
                     h === "at_risk" && "text-red-500",
+                    h === "uncovered" && "text-amber-500",
                     h === "covered" && "text-emerald-500",
                     h === "in_progress" && "text-cyan-600"
                   )}
@@ -325,6 +391,7 @@ export default function TraceabilityMatrix({
           className="max-w-full overflow-x-auto"
           options={[
             { value: "all", label: "Todos" },
+            ...(data.hasCatalog ? [{ value: "uncovered" as const, label: "Sin cobertura" }] : []),
             { value: "at_risk", label: "En riesgo" },
             { value: "in_progress", label: "En progreso" },
             { value: "not_run", label: "Sin ejecutar" },
@@ -363,14 +430,24 @@ export default function TraceabilityMatrix({
                         isOpen && "bg-slate-50/60"
                       )}
                     >
-                      <td className="px-4 py-2.5">
-                        <span className="flex items-center gap-2 font-mono font-medium text-slate-900">
+                      <td className="px-4 py-2.5 max-w-[22rem]">
+                        <span className="flex items-start gap-2">
                           <ChevronRight
                             size={15}
                             aria-hidden
-                            className={cn("text-slate-400 transition-transform", isOpen && "rotate-90")}
+                            className={cn(
+                              "mt-0.5 shrink-0 text-slate-400 transition-transform",
+                              isOpen && "rotate-90"
+                            )}
                           />
-                          {req.key}
+                          <span className="min-w-0">
+                            <span className="block font-mono font-medium text-slate-900">{req.key}</span>
+                            {req.title && (
+                              <span className="block truncate text-xs text-slate-500" title={req.title}>
+                                {req.title}
+                              </span>
+                            )}
+                          </span>
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
@@ -380,13 +457,17 @@ export default function TraceabilityMatrix({
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{total}</td>
                       <td className="px-3 py-2.5">
-                        <ResultsBar counts={req.counts} total={total} />
+                        {total ? (
+                          <ResultsBar counts={req.counts} total={total} />
+                        ) : (
+                          <span className="text-xs text-amber-700">Sin casos de prueba</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-medium text-slate-800">
-                        {Math.round((req.counts.passed / total) * 100)}%
+                        {total ? `${Math.round((req.counts.passed / total) * 100)}%` : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-slate-600">
-                        {req.automated}/{total}
+                        {total ? `${req.automated}/${total}` : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-2.5 text-right">
                         {req.openDefects > 0 ? (
@@ -401,7 +482,31 @@ export default function TraceabilityMatrix({
                     {isOpen && (
                       <tr className="border-b border-slate-100 bg-slate-50/40">
                         <td colSpan={7} className="p-0">
-                          <CaseRows cases={cases} projectId={projectId} />
+                          {cases.length > 0 ? (
+                            <CaseRows cases={cases} projectId={projectId} />
+                          ) : (
+                            <p className="px-4 py-3 text-sm text-slate-500">
+                              Ningún caso tiene un código de este requisito. Crea un caso con un
+                              código como{" "}
+                              <span className="font-mono text-xs text-slate-700">
+                                TC-{req.key.replace("-", "")}-01
+                              </span>{" "}
+                              para cubrirlo.
+                            </p>
+                          )}
+                          {req.id && (
+                            <div className="flex justify-end px-4 pb-2">
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                icon={Trash2}
+                                className="text-slate-500 hover:text-red-600"
+                                onClick={() => setPendingRemove(req)}
+                              >
+                                Quitar de la lista de requisitos
+                              </Button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}
@@ -452,6 +557,20 @@ export default function TraceabilityMatrix({
           )}
         </Card>
       )}
+
+      {importModal}
+      <ConfirmModal
+        open={pendingRemove !== null}
+        title={`¿Quitar ${pendingRemove?.key ?? ""} de la lista?`}
+        message={
+          pendingRemove?.cases.length
+            ? "Sus casos no se borran y el requisito seguirá apareciendo por sus códigos, pero sin nombre."
+            : "Dejará de aparecer en la matriz. No se borra ningún caso."
+        }
+        confirmLabel="Quitar"
+        onConfirm={() => pendingRemove && removeRequirement(pendingRemove)}
+        onCancel={() => setPendingRemove(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,14 @@
 import { db } from "@/db";
-import { defects, defectTestCases, testCases, testRunCases, testSuites } from "@/db/schema";
+import {
+  defects,
+  defectTestCases,
+  requirements as requirementsTable,
+  testCases,
+  testRunCases,
+  testSuites,
+} from "@/db/schema";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
+import { requirementOf } from "@/lib/requirement-key";
 
 export type CaseStatus = "untested" | "passed" | "failed" | "blocked" | "skipped";
 
@@ -21,10 +29,15 @@ export type TraceCase = {
 //  - covered:     every case passed
 //  - in_progress: some executed, none failed, not all passed yet
 //  - not_run:     no case executed yet
-export type RequirementHealth = "at_risk" | "covered" | "in_progress" | "not_run";
+//  - uncovered:   in the project's requirement list but no case has its code
+export type RequirementHealth = "at_risk" | "covered" | "in_progress" | "not_run" | "uncovered";
 
 export type Requirement = {
-  key: string; // "RF-020", "CAT"…; "" for cases without a requirement
+  key: string; // "RF-020", "CAT"…
+  // From the loaded requirement list; null when the requirement only comes
+  // from case codes.
+  id: string | null;
+  title: string | null;
   cases: TraceCase[];
   counts: Record<CaseStatus, number>;
   automated: number;
@@ -34,23 +47,15 @@ export type Requirement = {
 
 export type TraceabilityData = {
   requirements: Requirement[];
+  // Whether the project has a loaded requirement list. Without one, the
+  // matrix can't know about requirements that have no cases.
+  hasCatalog: boolean;
   // Cases whose code doesn't name a requirement (or that have no code).
   unassigned: TraceCase[];
 };
 
-// Requirement a case code belongs to:
-//   "TC-RF020-06"  → "RF-020"
-//   "TC-RNF005-01" → "RNF-005"
-//   "TC-CAT-023"   → "CAT"
-// Codes that don't follow the TC-<requirement>-<n> shape have none.
-export function requirementOf(code: string | null | undefined): string | null {
-  const m = code?.toUpperCase().match(/^TC-([A-Z]+)(\d*)-[A-Z0-9]+$/);
-  if (!m) return null;
-  const [, prefix, number] = m;
-  return number ? `${prefix}-${number}` : prefix;
-}
-
 export function healthOf(counts: Record<CaseStatus, number>, total: number): RequirementHealth {
+  if (total === 0) return "uncovered";
   if (counts.failed + counts.blocked > 0) return "at_risk";
   if (total > 0 && counts.passed === total) return "covered";
   if (counts.untested === total) return "not_run";
@@ -66,11 +71,32 @@ const emptyCounts = (): Record<CaseStatus, number> => ({
 });
 
 export async function getTraceabilityData(projectId: string): Promise<TraceabilityData> {
-  const suites = await db.query.testSuites.findMany({
-    where: eq(testSuites.projectId, projectId),
-    columns: { id: true, name: true },
-  });
-  if (suites.length === 0) return { requirements: [], unassigned: [] };
+  const [suites, catalog] = await Promise.all([
+    db.query.testSuites.findMany({
+      where: eq(testSuites.projectId, projectId),
+      columns: { id: true, name: true },
+    }),
+    db.query.requirements.findMany({ where: eq(requirementsTable.projectId, projectId) }),
+  ]);
+  const catalogByKey = new Map(catalog.map((r) => [r.key, r]));
+  if (suites.length === 0) {
+    return {
+      requirements: catalog
+        .sort((a, b) => a.key.localeCompare(b.key, "es", { numeric: true }))
+        .map((r) => ({
+          key: r.key,
+          id: r.id,
+          title: r.title,
+          cases: [],
+          counts: emptyCounts(),
+          automated: 0,
+          openDefects: 0,
+          health: "uncovered" as const,
+        })),
+      hasCatalog: catalog.length > 0,
+      unassigned: [],
+    };
+  }
   const suiteIds = suites.map((s) => s.id);
   const suiteName = new Map(suites.map((s) => [s.id, s.name]));
 
@@ -135,13 +161,19 @@ export async function getTraceabilityData(projectId: string): Promise<Traceabili
     else unassigned.push(tc);
   }
 
+  // Every listed requirement appears, with or without cases.
+  for (const r of catalog) if (!byRequirement.has(r.key)) byRequirement.set(r.key, []);
+
   const requirements = [...byRequirement.entries()]
     .sort(([a], [b]) => a.localeCompare(b, "es", { numeric: true }))
     .map(([key, list]): Requirement => {
       const counts = emptyCounts();
       for (const c of list) counts[c.status]++;
+      const listed = catalogByKey.get(key);
       return {
         key,
+        id: listed?.id ?? null,
+        title: listed?.title ?? null,
         cases: list,
         counts,
         automated: list.filter((c) => c.automated).length,
@@ -150,5 +182,5 @@ export async function getTraceabilityData(projectId: string): Promise<Traceabili
       };
     });
 
-  return { requirements, unassigned };
+  return { requirements, hasCatalog: catalog.length > 0, unassigned };
 }
