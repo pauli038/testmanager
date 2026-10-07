@@ -29,8 +29,16 @@
  * (incluyendo describe blocks, ej: "Login > should log in with valid credentials").
  * Si en tu Test Manager creas un caso de prueba y le pones ese mismo texto en el
  * campo "ID/título del test en Playwright" (automationId), los resultados se
- * asociarán a ese caso ya existente. Si no existe, el caso se crea automáticamente
- * dentro de una suite llamada "Automatizado (Playwright)".
+ * asociarán a ese caso ya existente.
+ *
+ * Si no hay coincidencia exacta, el Test Manager también vincula el test a un caso:
+ *   - por código: si el título del test incluye un código como "TC-RF020-06" o
+ *     "RN-044" y un solo caso tiene ese código en sus etiquetas (o en su
+ *     automationId/título), los resultados van a ese caso;
+ *   - por título: si un caso aún sin automationId tiene el mismo título,
+ *     ignorando mayúsculas, tildes, puntuación y códigos.
+ * Si nada coincide, el caso se crea automáticamente dentro de una suite llamada
+ * "Automatizado (Playwright)".
  */
 import type {
   FullConfig,

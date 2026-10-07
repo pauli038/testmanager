@@ -8,7 +8,8 @@ import {
   testCases,
   attachments,
 } from "@/db/schema";
-import { eq, and, or, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import { extractCodes, caseCodes, normalizeTitle } from "@/lib/case-matching";
 
 // Playwright integration endpoint.
 // Auth: header "x-api-key: tm_xxx" (create one in Project > Settings > API Keys)
@@ -82,54 +83,81 @@ export async function POST(req: NextRequest) {
     .returning();
 
   // Cases must belong to this project — otherwise an automationId shared with
-  // another project's case could match the wrong one.
+  // another project's case could match the wrong one. Loaded once and kept in
+  // sync below, so results later in the same batch see cases linked or
+  // created by earlier ones.
   const projectSuiteIds = (
     await db.query.testSuites.findMany({
       where: eq(testSuites.projectId, keyRecord.projectId),
       columns: { id: true },
     })
   ).map((s) => s.id);
+  const projectCases = await db.query.testCases.findMany({
+    where: inArray(testCases.suiteId, projectSuiteIds),
+  });
+  type Case = (typeof projectCases)[number];
+
+  // Among several candidates, a case written by hand in its real suite beats
+  // one auto-created in "Automatizado (Playwright)". Still ambiguous → none.
+  const pickOne = (candidates: Case[]): Case | undefined => {
+    if (candidates.length === 1) return candidates[0];
+    const real = candidates.filter((c) => c.suiteId !== autoSuite.id);
+    return real.length === 1 ? real[0] : undefined;
+  };
+
+  const linkCase = async (c: Case, automationId: string): Promise<Case> => {
+    // Keep an existing automationId: several Playwright tests may feed the
+    // same case (e.g. an e2e test and a unit test), matched by code.
+    if (c.automated && c.automationId) return c;
+    const [updated] = await db
+      .update(testCases)
+      .set({ automated: true, automationId: c.automationId ?? automationId })
+      .where(eq(testCases.id, c.id))
+      .returning();
+    projectCases[projectCases.indexOf(c)] = updated;
+    return updated;
+  };
 
   const created = [];
   for (const r of results) {
-    const normalizedTitle = (r.title || r.automationId || "").trim().toLowerCase();
+    const shortTitle = r.title || r.automationId;
 
     // 1) Match by the full titlePath (recommended, set via automationId) or
     // by the test's short title — some users paste the short title instead.
     // Restricted to cases already marked automated, so a Playwright result
     // never latches onto an unrelated manual case with the same text.
-    let testCase = await db.query.testCases.findFirst({
-      where: and(
-        inArray(testCases.suiteId, projectSuiteIds),
-        eq(testCases.automated, true),
-        or(
-          eq(testCases.automationId, r.automationId),
-          eq(testCases.automationId, r.title || r.automationId)
-        )
-      ),
-    });
+    let testCase = projectCases.find(
+      (c) => c.automated && (c.automationId === r.automationId || c.automationId === shortTitle)
+    );
 
-    // 2) No case has that automationId yet — but if there's already a case
-    // with the exact same title sitting in its real suite (created by hand,
-    // automationId never filled in, often not even flagged as automated),
-    // reuse it instead of creating a duplicate in "Automatizado (Playwright)".
-    // Mark it automated and backfill its automationId so future runs match
-    // directly via automationId.
-    if (!testCase && normalizedTitle) {
-      const titleMatch = await db.query.testCases.findFirst({
-        where: and(
-          inArray(testCases.suiteId, projectSuiteIds),
-          isNull(testCases.automationId),
-          sql`lower(trim(${testCases.title})) = ${normalizedTitle}`
-        ),
-      });
-      if (titleMatch) {
-        [testCase] = await db
-          .update(testCases)
-          .set({ automated: true, automationId: r.automationId })
-          .where(eq(testCases.id, titleMatch.id))
-          .returning();
+    // 2) Match by test code: "TC-RF020-06 …" or "… (RN-044)" in the test's
+    // title/titlePath links to the case that has that code in its tags,
+    // automationId or title. TC codes identify a single case, so they're
+    // tried before RN (business rule) codes.
+    if (!testCase) {
+      const codes = extractCodes(`${r.automationId} ${shortTitle}`);
+      for (const tier of [codes.filter((c) => c.startsWith("TC-")), codes]) {
+        if (tier.length === 0) continue;
+        const match = pickOne(projectCases.filter((c) => tier.some((code) => caseCodes(c).has(code))));
+        if (match) {
+          testCase = await linkCase(match, r.automationId);
+          break;
+        }
       }
+    }
+
+    // 3) No case has that automationId or code yet — but if there's already a
+    // case with the same title (ignoring case, accents, punctuation and test
+    // codes) sitting in its real suite (created by hand, automationId never
+    // filled in), reuse it instead of creating a duplicate in "Automatizado
+    // (Playwright)". Mark it automated and backfill its automationId so
+    // future runs match directly via automationId.
+    const normalizedTitle = normalizeTitle(shortTitle);
+    if (!testCase && normalizedTitle) {
+      const match = pickOne(
+        projectCases.filter((c) => !c.automationId && normalizeTitle(c.title) === normalizedTitle)
+      );
+      if (match) testCase = await linkCase(match, r.automationId);
     }
 
     if (!testCase) {
@@ -137,12 +165,13 @@ export async function POST(req: NextRequest) {
         .insert(testCases)
         .values({
           suiteId: autoSuite.id,
-          title: r.title || r.automationId,
+          title: shortTitle,
           steps: "[]",
           automated: true,
           automationId: r.automationId,
         })
         .returning();
+      projectCases.push(testCase);
     }
 
     const [runCase] = await db
