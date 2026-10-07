@@ -3,6 +3,8 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import AuthShell from "@/components/AuthShell";
+import { Button, Input, Label } from "@/components/ui";
 
 function ResetPasswordForm() {
   const token = useSearchParams().get("token") || "";
@@ -36,9 +38,9 @@ function ResetPasswordForm() {
 
   if (!token) {
     return (
-      <p className="text-sm text-slate-600 mt-4">
+      <p className="text-sm text-slate-600">
         El enlace está incompleto.{" "}
-        <Link href="/forgot-password" className="text-teal-600 hover:underline">
+        <Link href="/forgot-password" className="text-brand-600 hover:underline">
           Solicita uno nuevo
         </Link>
         .
@@ -48,9 +50,9 @@ function ResetPasswordForm() {
 
   if (done) {
     return (
-      <p className="text-sm text-slate-600 mt-4">
+      <p className="text-sm text-slate-600">
         Tu contraseña se cambió correctamente.{" "}
-        <Link href="/login" className="text-teal-600 hover:underline">
+        <Link href="/login" className="text-brand-600 hover:underline">
           Inicia sesión
         </Link>
         .
@@ -59,52 +61,45 @@ function ResetPasswordForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm text-slate-700 mb-1">Nueva contraseña</label>
-        <input
+        <Label>Nueva contraseña</Label>
+        <Input
           type="password"
           required
           minLength={6}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
         />
       </div>
       <div>
-        <label className="block text-sm text-slate-700 mb-1">Confirmar contraseña</label>
-        <input
+        <Label>Confirmar contraseña</Label>
+        <Input
           type="password"
           required
           minLength={6}
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
         />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button
+      <Button
+        fullWidth
         type="submit"
-        disabled={loading}
-        className="w-full rounded-lg bg-teal-600 text-white text-sm font-medium py-2 hover:bg-teal-700 disabled:opacity-50"
+        loading={loading}
       >
-        {loading ? "Guardando..." : "Cambiar contraseña"}
-      </button>
+        Cambiar contraseña
+      </Button>
     </form>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
-        <h1 className="text-xl font-semibold text-slate-900 mb-1">
-          Nueva contraseña
-        </h1>
-        <Suspense>
-          <ResetPasswordForm />
-        </Suspense>
-      </div>
-    </div>
+    <AuthShell title="Nueva contraseña">
+      <Suspense>
+        <ResetPasswordForm />
+      </Suspense>
+    </AuthShell>
   );
 }

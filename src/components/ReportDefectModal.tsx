@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button, Input, Label, Modal, Select } from "@/components/ui";
+import { Bug } from "lucide-react";
 
 const severityOptions = [
   { value: "low", label: "Baja" },
@@ -35,8 +37,6 @@ export default function ReportDefectModal({
     }
   }, [open, caseTitle]);
 
-  if (!open) return null;
-
   const canSubmit = title.trim().length > 0 && !submitting;
 
   function submit() {
@@ -45,58 +45,58 @@ export default function ReportDefectModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[60] p-4">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
-        <h2 className="text-base font-semibold text-slate-900 mb-1">🐞 Reportar defecto</h2>
-        <p className="text-sm text-slate-500 mb-4">
+    <Modal
+      open={open}
+      onClose={onCancel}
+      size="sm"
+      zIndex="z-[60]"
+      title={
+        <span className="flex items-center gap-2">
+          <Bug size={16} className="text-red-600" aria-hidden />
+          Reportar defecto
+        </span>
+      }
+      description={
+        <>
           Para el caso <span className="font-medium text-slate-700">&quot;{caseTitle}&quot;</span>
-        </p>
-
-        <label className="block text-xs font-medium text-slate-500 mb-1">Título</label>
-        <input
+        </>
+      }
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button variant="danger" icon={Bug} onClick={submit} disabled={!canSubmit} loading={submitting}>
+            Reportar defecto
+          </Button>
+        </>
+      }
+    >
+        <Label>Título</Label>
+        <Input
           autoFocus
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
-            if (e.key === "Escape") onCancel();
           }}
           placeholder="Describe brevemente el defecto"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          className="mb-4"
         />
 
-        <label className="block text-xs font-medium text-slate-500 mb-1">Severidad</label>
-        <select
+        <Label>Severidad</Label>
+        <Select
           value={severity}
           onChange={(e) => setSeverity(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-6"
         >
           {severityOptions.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!canSubmit}
-            className="rounded-lg text-white text-sm font-medium px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50"
-          >
-            {submitting ? "Reportando..." : "Reportar defecto"}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

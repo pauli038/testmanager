@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button, Input } from "@/components/ui";
+import { Check, Copy, Link2 } from "lucide-react";
 
 // Admin-only: generates a one-time password reset link for a user and shows
 // it so it can be copied and handed over manually.
@@ -32,15 +34,15 @@ export default function ResetLinkButton({ userId }: { userId: string }) {
   if (link) {
     return (
       <div className="flex items-center gap-2 mt-2 w-full">
-        <input
+        <Input
           readOnly
           value={link}
           onFocus={(e) => e.target.select()}
-          className="flex-1 min-w-0 rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+          className="flex-1 min-w-0 text-xs text-slate-700 h-8"
         />
-        <button onClick={copy} className="text-xs text-teal-600 hover:underline whitespace-nowrap">
+        <Button size="sm" variant="secondary" icon={copied ? Check : Copy} onClick={copy}>
           {copied ? "Copiado" : "Copiar"}
-        </button>
+        </Button>
         <span className="text-xs text-slate-400 whitespace-nowrap">Vence en 1 h</span>
       </div>
     );
@@ -49,13 +51,9 @@ export default function ResetLinkButton({ userId }: { userId: string }) {
   return (
     <span className="flex items-center gap-2">
       {error && <span className="text-xs text-red-600">{error}</span>}
-      <button
-        onClick={generate}
-        disabled={loading}
-        className="text-xs text-teal-600 hover:underline disabled:opacity-50"
-      >
-        {loading ? "Generando..." : "Enlace para restablecer contraseña"}
-      </button>
+      <Button size="xs" variant="ghost" icon={Link2} loading={loading} onClick={generate}>
+        Enlace para restablecer contraseña
+      </Button>
     </span>
   );
 }

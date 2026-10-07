@@ -3,6 +3,8 @@
 import { useState } from "react";
 import SuitesExplorer from "./SuitesExplorer";
 import CaseKanbanBoard, { type KanbanColumn, type KanbanCase } from "./CaseKanbanBoard";
+import { Columns3, FolderTree } from "lucide-react";
+import { Segmented } from "@/components/ui";
 
 type Suite = { id: string; name: string; description: string | null };
 type TestCase = {
@@ -39,24 +41,14 @@ export default function CasesView({
     <div>
       <div className="flex items-center justify-end gap-2 mb-4">
         <div ref={setHeaderActionsEl} className="flex gap-2" />
-        <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-          <button
-            onClick={() => setView("suites")}
-            className={`text-sm font-medium px-3 py-1.5 ${
-              view === "suites" ? "bg-slate-100 text-slate-900" : "bg-white text-slate-500 hover:bg-slate-50"
-            }`}
-          >
-            🗂️ Por suites
-          </button>
-          <button
-            onClick={() => setView("kanban")}
-            className={`text-sm font-medium px-3 py-1.5 border-l border-slate-200 ${
-              view === "kanban" ? "bg-slate-100 text-slate-900" : "bg-white text-slate-500 hover:bg-slate-50"
-            }`}
-          >
-            🧭 Kanban QA
-          </button>
-        </div>
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "suites", label: "Por suites", icon: FolderTree },
+            { value: "kanban", label: "Kanban QA", icon: Columns3 },
+          ]}
+        />
       </div>
 
       {view === "suites" ? (

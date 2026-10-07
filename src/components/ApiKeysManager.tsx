@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import ConfirmModal from "./ConfirmModal";
+import { Button, EmptyState, IconButton, Input } from "@/components/ui";
+import { Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
 
 type ApiKey = { id: string; name: string; key: string; createdAt: string };
 
@@ -55,52 +57,59 @@ export default function ApiKeysManager({
       </h3>
       <p className="text-xs text-slate-500 mb-3">
         Usa una API key para que tus pruebas de Playwright manden resultados automáticamente a
-        este proyecto. Endpoint: <code className="bg-slate-100 px-1 rounded">{ingestUrl}</code>
+        este proyecto. Endpoint: <code className="bg-slate-100 px-1 rounded font-mono">{ingestUrl}</code>
       </p>
 
       <form onSubmit={createKey} className="flex gap-2 mb-4">
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-auto"
         />
-        <button className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-2 hover:bg-teal-700">
-          + Generar API key
-        </button>
+        <Button icon={Plus} type="submit">
+          Generar API key
+        </Button>
       </form>
 
       <div className="space-y-2">
         {keys.map((k) => (
           <div
             key={k.id}
-            className="bg-white border border-slate-200 rounded-lg p-3 flex items-center justify-between"
+            className="bg-white border border-slate-200 rounded-xl shadow-sm px-4 py-3 flex items-center justify-between gap-4"
           >
-            <div>
-              <p className="text-sm font-medium text-slate-900">{k.name}</p>
-              <code className="text-xs text-slate-500">
-                {revealed.has(k.id) ? k.key : "tm_••••••••••••••••••••••••"}
-              </code>
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
+                <KeyRound size={15} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{k.name}</p>
+                <code className="text-xs text-slate-500 font-mono break-all">
+                  {revealed.has(k.id) ? k.key : "tm_••••••••••••••••••••••••"}
+                </code>
+              </div>
             </div>
-            <div className="flex gap-3 text-xs">
-              <button
+            <div className="flex gap-0.5 shrink-0">
+              <IconButton
+                icon={revealed.has(k.id) ? EyeOff : Eye}
+                label={revealed.has(k.id) ? "Ocultar" : "Mostrar"}
                 onClick={() => toggleReveal(k.id)}
-                className="text-teal-600 hover:underline"
-              >
-                {revealed.has(k.id) ? "Ocultar" : "Mostrar"}
-              </button>
-              <button
+              />
+              <IconButton
+                icon={Trash2}
+                label="Eliminar API key"
+                tone="danger"
                 onClick={() => setPendingDelete(k.id)}
-                className="text-red-600 hover:underline"
-              >
-                Eliminar
-              </button>
+              />
             </div>
           </div>
         ))}
         {keys.length === 0 && (
-          <p className="text-sm text-slate-400 py-6 text-center border border-dashed border-slate-300 rounded-xl">
-            No hay API keys todavía. Genera una para conectar Playwright.
-          </p>
+          <EmptyState
+            icon={KeyRound}
+            title="No hay API keys todavía"
+            description="Genera una para conectar Playwright."
+            className="py-8"
+          />
         )}
       </div>
 

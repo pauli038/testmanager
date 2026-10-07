@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import ResetLinkButton from "./ResetLinkButton";
+import { Badge, Button, IconButton, Input, Label, Modal, Select } from "@/components/ui";
+import { Check, Copy, Plus, X } from "lucide-react";
 
 type Role = "admin" | "lead" | "tester";
 type User = { id: string; name: string; email: string; role: Role; createdAt: string };
@@ -78,85 +80,90 @@ export default function UsersManager({
     }
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500";
-
   return (
     <div className="space-y-4">
       {isAdmin && (
         <div className="flex justify-end">
-          <button
+          <Button icon={Plus}
             onClick={() => {
               setAdding(true);
               setAddError("");
             }}
-            className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700"
           >
-            + Agregar usuario
-          </button>
+            Agregar usuario
+          </Button>
         </div>
       )}
 
       {invite && (
-        <div className="bg-teal-50 border border-teal-200 rounded-lg p-4 text-sm">
+        <div className="bg-brand-50 border border-brand-200 rounded-xl p-4 text-sm">
           <p className="text-slate-800">
             Usuario <strong>{invite.email}</strong> creado. Envíale este enlace para que defina su
             contraseña (vence en 1 hora; si vence, genera otro desde su fila):
           </p>
           <div className="flex items-center gap-2 mt-2">
-            <input
+            <Input
               readOnly
               value={invite.link}
               onFocus={(e) => e.target.select()}
-              className="flex-1 min-w-0 rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700"
+              className="flex-1 min-w-0 text-xs text-slate-700 h-8"
             />
-            <button
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={copied ? Check : Copy}
               onClick={async () => {
                 await navigator.clipboard.writeText(invite.link);
                 setCopied(true);
               }}
-              className="text-xs text-teal-700 hover:underline whitespace-nowrap"
             >
               {copied ? "Copiado" : "Copiar"}
-            </button>
-            <button
-              onClick={() => setInvite(null)}
-              className="text-xs text-slate-500 hover:text-slate-800"
-            >
-              Cerrar
-            </button>
+            </Button>
+            <IconButton icon={X} label="Cerrar" onClick={() => setInvite(null)} />
           </div>
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-lg divide-y divide-slate-100">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm divide-y divide-slate-100">
         {users.map((u) => (
-          <div key={u.id} className="p-4 text-sm">
+          <div key={u.id} className="px-4 py-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <div className="min-w-0">
-                <span className="text-slate-900 font-medium">{u.name}</span>
-                {u.id === currentUserId && (
-                  <span className="ml-2 text-xs text-slate-400">(tú)</span>
-                )}
-                <div className="text-slate-500 truncate">{u.email}</div>
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-700 text-xs font-semibold ring-1 ring-brand-100">
+                  {(u.name || u.email)
+                    .split(/\s+/)
+                    .map((w) => w[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <span className="text-slate-900 font-medium">{u.name}</span>
+                  {u.id === currentUserId && (
+                    <Badge tone="brand" className="ml-2">
+                      Tú
+                    </Badge>
+                  )}
+                  <div className="text-slate-500 truncate">{u.email}</div>
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 {isAdmin && <ResetLinkButton userId={u.id} />}
                 {isAdmin ? (
-                  <select
+                  <Select
                     value={u.role}
                     onChange={(e) => changeRole(u.id, e.target.value as Role)}
                     aria-label={`Rol de ${u.name}`}
-                    className="rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="text-xs text-slate-700 w-auto h-8"
                   >
                     {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
                       <option key={r} value={r}>
                         {ROLE_LABELS[r]}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
-                  <span className="text-xs uppercase text-slate-500">{u.role}</span>
+                  <Badge>{ROLE_LABELS[u.role as Role] ?? u.role}</Badge>
                 )}
               </div>
             </div>
@@ -168,57 +175,50 @@ export default function UsersManager({
       </div>
 
       {adding && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">Agregar usuario</h2>
-            <p className="text-sm text-slate-500 mb-4">
-              Se generará un enlace para que la persona defina su contraseña.
-            </p>
+        <Modal
+          onClose={() => setAdding(false)}
+          title="Agregar usuario"
+          description="Se generará un enlace para que la persona defina su contraseña."
+        >
             <form onSubmit={addUser} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Nombre</label>
-                <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+                <Label>Nombre</Label>
+                <Input required value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Correo</label>
-                <input
+                <Label>Correo</Label>
+                <Input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Rol</label>
-                <select value={role} onChange={(e) => setRole(e.target.value as Role)} className={inputClass}>
+                <Label>Rol</Label>
+                <Select value={role} onChange={(e) => setRole(e.target.value as Role)}>
                   {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
                     <option key={r} value={r}>
                       {ROLE_LABELS[r]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               {addError && <p className="text-sm text-red-600">{addError}</p>}
               <div className="flex justify-end gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   type="button"
                   onClick={() => setAdding(false)}
-                  className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
                 >
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
-                >
-                  {saving ? "Agregando..." : "Agregar"}
-                </button>
+                </Button>
+                <Button type="submit" loading={saving}>
+                  Agregar
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

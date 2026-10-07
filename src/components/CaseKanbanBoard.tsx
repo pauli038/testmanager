@@ -3,6 +3,21 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import {
+  AutomatedBadge,
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  Input,
+  Modal,
+  PriorityBadge,
+  Select,
+  STATUS_META,
+  type RunStatus,
+} from "@/components/ui";
+import { ChevronDown, ChevronUp, Columns3, Folder, Plus, Settings2, Trash2, X } from "lucide-react";
+import ConfirmModal from "./ConfirmModal";
 
 export type KanbanColumn = {
   id: string;
@@ -78,19 +93,8 @@ function ColorPicker({
   );
 }
 
-const priorityColors: Record<string, string> = {
-  low: "bg-slate-100 text-slate-600",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
-};
-
-const lastStatusConfig: Record<string, { icon: string; classes: string }> = {
-  passed: { icon: "✅", classes: "bg-emerald-100 text-emerald-700" },
-  failed: { icon: "❌", classes: "bg-red-100 text-red-700" },
-  blocked: { icon: "🚫", classes: "bg-orange-100 text-orange-700" },
-  skipped: { icon: "⏭️", classes: "bg-slate-100 text-slate-500" },
-};
+const isRunStatus = (s: string | null | undefined): s is RunStatus =>
+  s === "passed" || s === "failed" || s === "blocked" || s === "skipped";
 
 export default function CaseKanbanBoard({
   projectId,
@@ -259,18 +263,15 @@ export default function CaseKanbanBoard({
 
   const headerActions = (
     <>
-      <button
+      <Button icon={Plus}
+        size="sm"
         onClick={openAddModal}
-        className="text-sm font-medium rounded-lg bg-teal-600 text-white px-3 py-1.5 hover:bg-teal-700"
       >
-        + Agregar casos {unassignedCases.length > 0 && `(${unassignedCases.length})`}
-      </button>
-      <button
-        onClick={() => setConfigOpen((v) => !v)}
-        className="text-sm font-medium rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50"
-      >
-        ⚙ {configOpen ? "Cerrar configuración" : "Configurar columnas"}
-      </button>
+        Agregar casos {unassignedCases.length > 0 && `(${unassignedCases.length})`}
+      </Button>
+      <Button variant="secondary" size="sm" icon={Settings2} onClick={() => setConfigOpen((v) => !v)}>
+        {configOpen ? "Cerrar configuración" : "Configurar columnas"}
+      </Button>
     </>
   );
 
@@ -279,10 +280,10 @@ export default function CaseKanbanBoard({
       {headerActionsContainer && createPortal(headerActions, headerActionsContainer)}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <select
+          <Select
             value={suiteFilter}
             onChange={(e) => setSuiteFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="text-slate-700 w-auto h-8"
           >
             <option value="">Todas las suites</option>
             {suiteOptions.map(([id, name]) => (
@@ -290,76 +291,78 @@ export default function CaseKanbanBoard({
                 {name}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             value={automationFilter}
             onChange={(e) => setAutomationFilter(e.target.value as "" | "manual" | "automated")}
-            className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="text-slate-700 w-auto h-8"
           >
             <option value="">Manual y automatizado</option>
             <option value="manual">Solo manual</option>
             <option value="automated">Solo automatizado</option>
-          </select>
+          </Select>
         </div>
         {!headerActionsContainer && <div className="flex items-center gap-2">{headerActions}</div>}
       </div>
 
       {configOpen && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-4">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
           <h3 className="text-sm font-medium text-slate-700 mb-3">Fases del ciclo de QA</h3>
           <div className="space-y-2 mb-4">
             {columns.map((col, i) => (
               <div key={col.id} className="flex items-center gap-2">
-                <div className="flex gap-0.5">
-                  <button
+                <div className="flex">
+                  <IconButton
+                    icon={ChevronUp}
+                    label="Mover antes"
+                    size="sm"
                     disabled={i === 0}
                     onClick={() => reorderColumn(col.id, -1)}
-                    className="text-slate-400 hover:text-slate-700 disabled:opacity-20 text-xs w-5"
-                  >
-                    ▲
-                  </button>
-                  <button
+                  />
+                  <IconButton
+                    icon={ChevronDown}
+                    label="Mover después"
+                    size="sm"
                     disabled={i === columns.length - 1}
                     onClick={() => reorderColumn(col.id, 1)}
-                    className="text-slate-400 hover:text-slate-700 disabled:opacity-20 text-xs w-5"
-                  >
-                    ▼
-                  </button>
+                  />
                 </div>
                 <ColorPicker value={col.color} onChange={(color) => recolorColumn(col.id, color)} />
-                <input
+                <Input
                   value={col.label}
                   onChange={(e) => renameColumn(col.id, e.target.value)}
-                  className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                  className="flex-1 h-8"
                 />
-                <button
+                <IconButton
+                  icon={Trash2}
+                  label="Eliminar fase"
+                  tone="danger"
                   onClick={() => setPendingDeleteColumn(col)}
-                  className="text-slate-400 hover:text-red-600 text-xs px-2"
-                >
-                  ✕
-                </button>
+                />
               </div>
             ))}
           </div>
           <form onSubmit={addColumn} className="flex items-center gap-2 pt-3 border-t border-slate-100">
             <ColorPicker value={newColumnColor} onChange={setNewColumnColor} />
-            <input
+            <Input
               value={newColumnLabel}
               onChange={(e) => setNewColumnLabel(e.target.value)}
               placeholder="Nueva fase (ej. Regresión)"
-              className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              className="flex-1 h-8"
             />
-            <button className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700">
-              + Agregar
-            </button>
+            <Button icon={Plus} size="sm" type="submit">
+              Agregar
+            </Button>
           </form>
         </div>
       )}
 
       {columns.length === 0 ? (
-        <p className="text-sm text-slate-400 py-10 text-center border border-dashed border-slate-300 rounded-xl">
-          No hay fases configuradas. Usa &quot;Configurar columnas&quot; para crear la primera.
-        </p>
+        <EmptyState
+          icon={Columns3}
+          title="No hay fases configuradas"
+          description="Usa “Configurar columnas” para crear la primera."
+        />
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {columns.map((col) => {
@@ -375,16 +378,18 @@ export default function CaseKanbanBoard({
                 onDrop={() => handleDrop(col.key)}
                 className={`shrink-0 w-72 rounded-xl border ${
                   dragOverCol === col.key
-                    ? "border-teal-400 bg-teal-50/40"
-                    : "border-slate-200 bg-slate-50"
-                }`}
+                    ? "border-brand-400 bg-brand-50/40"
+                    : "border-slate-200 bg-slate-100/60"
+                } transition-colors`}
               >
-                <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200">
-                  <span className="text-xs font-semibold uppercase text-slate-600 flex items-center gap-1.5">
+                <div className="flex items-center justify-between px-3 py-2.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600 flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${COLOR_DOT[col.color] || "bg-slate-400"}`} />
                     {col.label}
                   </span>
-                  <span className="text-xs text-slate-400">{colCases.length}</span>
+                  <span className="text-xs font-medium tabular-nums text-slate-500 bg-white rounded-full px-2 py-0.5 ring-1 ring-slate-200">
+                    {colCases.length}
+                  </span>
                 </div>
                 <div className="p-2 space-y-2 min-h-[80px]">
                   {colCases.map((c) => (
@@ -394,39 +399,35 @@ export default function CaseKanbanBoard({
                       onDragStart={() => setDragId(c.id)}
                       onDragEnd={() => setDragId(null)}
                       onClick={() => router.push(`/projects/${projectId}/suites`)}
-                      className="group bg-white border border-slate-200 rounded-lg p-3 cursor-pointer hover:shadow-md hover:border-teal-300 transition"
+                      className="group bg-white border border-slate-200 rounded-lg p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-brand-300 transition"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="font-medium text-slate-900 text-sm leading-snug">{c.title}</h3>
-                        <button
+                        <IconButton
+                          icon={X}
+                          label="Quitar del kanban"
+                          size="sm"
+                          tone="danger"
+                          className="opacity-0 group-hover:opacity-100 -mr-1 -mt-0.5"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeFromBoard(c.id);
                           }}
-                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-600 text-xs shrink-0"
-                          title="Quitar del kanban"
-                        >
-                          ✕
-                        </button>
+                        />
                       </div>
-                      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
-                          📁 {c.suiteName}
-                        </span>
-                        <span className={`text-xs rounded px-1.5 py-0.5 ${priorityColors[c.priority]}`}>
-                          {c.priority}
-                        </span>
-                        {c.automated && (
-                          <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
-                            🤖
-                          </span>
-                        )}
-                        {c.lastStatus && lastStatusConfig[c.lastStatus] && (
-                          <span
-                            className={`text-xs rounded px-1.5 py-0.5 ${lastStatusConfig[c.lastStatus].classes}`}
-                          >
-                            {lastStatusConfig[c.lastStatus].icon}
-                          </span>
+                      <div className="mt-2 flex items-center gap-1 flex-wrap">
+                        <Badge icon={Folder} className="max-w-full truncate">
+                          {c.suiteName}
+                        </Badge>
+                        <PriorityBadge priority={c.priority} />
+                        {c.automated && <AutomatedBadge label="Auto" />}
+                        {isRunStatus(c.lastStatus) && (
+                          <Badge
+                            tone={STATUS_META[c.lastStatus].tone}
+                            icon={STATUS_META[c.lastStatus].icon}
+                            title={STATUS_META[c.lastStatus].label}
+                            aria-label={STATUS_META[c.lastStatus].label}
+                          />
                         )}
                       </div>
                     </div>
@@ -441,38 +442,20 @@ export default function CaseKanbanBoard({
         </div>
       )}
 
-      {pendingDeleteColumn && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-sm p-6">
-            <h2 className="text-base font-semibold text-slate-900 mb-2">¿Eliminar esta fase?</h2>
-            <p className="text-sm text-slate-600 mb-6">
-              Los casos en &quot;{pendingDeleteColumn.label}&quot; pasarán a la primera fase disponible.
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setPendingDeleteColumn(null)}
-                className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => deleteColumn(pendingDeleteColumn)}
-                className="rounded-lg bg-red-600 text-white text-sm font-medium px-4 py-2 hover:bg-red-700"
-              >
-                Eliminar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={pendingDeleteColumn !== null}
+        title="¿Eliminar esta fase?"
+        message={`Los casos en "${pendingDeleteColumn?.label ?? ""}" pasarán a la primera fase disponible.`}
+        onConfirm={() => pendingDeleteColumn && deleteColumn(pendingDeleteColumn)}
+        onCancel={() => setPendingDeleteColumn(null)}
+      />
 
       {addModalOpen && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-1">Agregar casos al Kanban</h2>
-            <p className="text-sm text-slate-500 mb-4">
-              Elegí los casos que querés que aparezcan en el tablero.
-            </p>
+        <Modal
+          onClose={() => setAddModalOpen(false)}
+          title="Agregar casos al Kanban"
+          description="Elegí los casos que querés que aparezcan en el tablero."
+        >
 
             {unassignedCases.length === 0 ? (
               <p className="text-sm text-slate-400 py-6 text-center border border-dashed border-slate-300 rounded-xl">
@@ -491,10 +474,10 @@ export default function CaseKanbanBoard({
                       type="checkbox"
                       checked={selectedToAdd.has(c.id)}
                       onChange={() => toggleSelectedToAdd(c.id)}
-                      className="accent-teal-600"
+                      className="accent-brand-600"
                     />
                     <span className="flex-1">{c.title}</span>
-                    <span className="text-xs text-slate-400 shrink-0">{c.suiteName}</span>
+                    <span className="text-xs text-slate-400 shrink-0 truncate max-w-32">{c.suiteName}</span>
                   </label>
                 ))}
               </div>
@@ -503,36 +486,34 @@ export default function CaseKanbanBoard({
             <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
               <div className="flex items-center gap-2">
                 <label className="text-sm text-slate-600">Fase inicial</label>
-                <select
+                <Select
                   value={addTargetColumn}
                   onChange={(e) => setAddTargetColumn(e.target.value)}
-                  className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                  className="w-auto h-8"
                 >
                   {columns.map((col) => (
                     <option key={col.id} value={col.key}>
                       {col.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => setAddModalOpen(false)}
-                  className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
                 >
                   Cancelar
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={addSelectedToBoard}
                   disabled={selectedToAdd.size === 0}
-                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
                 >
                   Agregar ({selectedToAdd.size})
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

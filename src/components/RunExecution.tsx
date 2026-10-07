@@ -3,6 +3,18 @@
 import { useEffect, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 import ReportDefectModal from "./ReportDefectModal";
+import {
+  AutomatedBadge,
+  Badge,
+  Button,
+  EmptyState,
+  StatusBadge,
+  STATUS_META,
+  Textarea,
+  cn,
+  type RunStatus,
+} from "@/components/ui";
+import { Bug, ChevronRight, ImagePlus, Loader2, ListChecks, X } from "lucide-react";
 
 const MAX_VIDEO_SECONDS = 200;
 // Above this size, upload in chunks instead of one request — some proxies
@@ -52,12 +64,16 @@ type RunCase = {
   defects: { id: string; title: string; status: string }[];
 };
 
-const statusConfig: Record<string, { label: string; icon: string; classes: string }> = {
-  untested: { label: "Sin probar", icon: "⚪", classes: "bg-slate-100 text-slate-600" },
-  passed: { label: "Passed", icon: "✅", classes: "bg-emerald-100 text-emerald-700" },
-  failed: { label: "Failed", icon: "❌", classes: "bg-red-100 text-red-700" },
-  blocked: { label: "Blocked", icon: "🚫", classes: "bg-orange-100 text-orange-700" },
-  skipped: { label: "Skipped", icon: "⏭️", classes: "bg-slate-100 text-slate-500" },
+const STATUS_ORDER: RunStatus[] = ["passed", "failed", "blocked", "skipped", "untested"];
+
+// Background of each status in the run's progress bar and of the result
+// buttons once selected (same palette as the dashboard).
+const STATUS_FILL: Record<RunStatus, string> = {
+  passed: "bg-emerald-500",
+  failed: "bg-red-500",
+  blocked: "bg-amber-500",
+  skipped: "bg-cyan-500",
+  untested: "bg-slate-200",
 };
 
 export default function RunExecution({
@@ -294,7 +310,12 @@ export default function RunExecution({
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-400">Cargando ejecución...</p>;
+  if (loading)
+    return (
+      <p className="flex items-center gap-2 text-sm text-slate-400">
+        <Loader2 size={16} className="animate-spin" aria-hidden /> Cargando ejecución...
+      </p>
+    );
   if (loadError) return <p className="text-sm text-red-600">{loadError}</p>;
 
   const stats = runCases.reduce(
@@ -308,60 +329,100 @@ export default function RunExecution({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900">{run?.name}</h2>
-          <div className="flex gap-3 mt-1 text-xs text-slate-500">
-            {Object.entries(statusConfig).map(([key, cfg]) => (
-              <span key={key}>
-                {cfg.icon} {stats[key] || 0} {cfg.label}
-              </span>
-            ))}
-            <span>· {total} total</span>
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 mb-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-900">{run?.name}</h2>
+          <span className="text-sm text-slate-500">
+            <span className="font-semibold text-slate-900 tabular-nums">
+              {total - (stats.untested || 0)}
+            </span>{" "}
+            de <span className="tabular-nums">{total}</span> ejecutados
+          </span>
+        </div>
+        {total > 0 && (
+          <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 mt-3">
+            {STATUS_ORDER.map((s) =>
+              stats[s] ? (
+                <div
+                  key={s}
+                  className={STATUS_FILL[s]}
+                  style={{ width: `${(stats[s] / total) * 100}%` }}
+                  title={`${STATUS_META[s].label}: ${stats[s]}`}
+                />
+              ) : null
+            )}
           </div>
+        )}
+        <div className="flex gap-1.5 mt-3 flex-wrap">
+          {STATUS_ORDER.map((s) => (
+            <StatusBadge
+              key={s}
+              status={s}
+              label={
+                <>
+                  <span className="tabular-nums">{stats[s] || 0}</span> {STATUS_META[s].label}
+                </>
+              }
+            />
+          ))}
         </div>
       </div>
+
+      {runCases.length === 0 && (
+        <EmptyState icon={ListChecks} title="Este run no tiene casos" />
+      )}
 
       <div className="space-y-2">
         {runCases.map((c) => {
           const steps: Step[] = JSON.parse(c.caseSteps || "[]");
           const isOpen = expanded === c.id;
           return (
-            <div key={c.id} className="bg-white border border-slate-200 rounded-lg">
+            <div
+              key={c.id}
+              className={cn(
+                "bg-white border rounded-xl shadow-sm transition-colors",
+                isOpen ? "border-brand-300" : "border-slate-200"
+              )}
+            >
               <div
-                className="flex items-center justify-between p-4 cursor-pointer"
+                className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
                 onClick={() => setExpanded(isOpen ? null : c.id)}
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`text-xs rounded px-2 py-1 ${statusConfig[c.status].classes}`}
-                  >
-                    {statusConfig[c.status].icon} {statusConfig[c.status].label}
-                  </span>
-                  <span className="text-sm font-medium text-slate-900">{c.caseTitle}</span>
-                  {c.caseAutomated && (
-                    <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
-                      🤖
-                    </span>
-                  )}
+                <div className="flex items-center gap-3 min-w-0">
+                  <ChevronRight
+                    size={16}
+                    aria-hidden
+                    className={cn("shrink-0 text-slate-400 transition-transform", isOpen && "rotate-90")}
+                  />
+                  <StatusBadge status={c.status as RunStatus} className="shrink-0" />
+                  <span className="text-sm font-medium text-slate-900 truncate">{c.caseTitle}</span>
+                  {c.caseAutomated && <AutomatedBadge label="Auto" className="shrink-0" />}
                 </div>
-                <div className="flex items-center gap-2">
-                  {(["passed", "failed", "blocked", "skipped"] as const).map((s) => (
-                    <button
-                      key={s}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setStatus(c.id, s);
-                      }}
-                      className={`text-xs rounded px-2 py-1 border ${
-                        c.status === s
-                          ? statusConfig[s].classes + " border-transparent"
-                          : "border-slate-200 text-slate-500 hover:bg-slate-50"
-                      }`}
-                    >
-                      {statusConfig[s].icon}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1 shrink-0" role="group" aria-label="Resultado">
+                  {(["passed", "failed", "blocked", "skipped"] as const).map((s) => {
+                    const Icon = STATUS_META[s].icon;
+                    const active = c.status === s;
+                    return (
+                      <button
+                        key={s}
+                        title={STATUS_META[s].label}
+                        aria-label={STATUS_META[s].label}
+                        aria-pressed={active}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setStatus(c.id, s);
+                        }}
+                        className={cn(
+                          "flex h-8 w-8 items-center justify-center rounded-lg border transition-colors",
+                          active
+                            ? `${STATUS_FILL[s]} border-transparent text-white shadow-sm`
+                            : "border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-slate-700"
+                        )}
+                      >
+                        <Icon size={16} aria-hidden />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -399,7 +460,7 @@ export default function RunExecution({
                       <p className="text-xs font-medium text-red-700 mb-1">
                         Error (Playwright)
                       </p>
-                      <pre className="text-xs text-red-700 whitespace-pre-wrap">
+                      <pre className="text-xs text-red-700 whitespace-pre-wrap font-mono overflow-x-auto">
                         {c.errorMessage}
                       </pre>
                     </div>
@@ -407,12 +468,11 @@ export default function RunExecution({
 
                   <div>
                     <p className="text-xs font-medium text-slate-500 mb-1">Comentario</p>
-                    <textarea
+                    <Textarea
                       defaultValue={c.comment || ""}
                       onBlur={(e) => saveComment(c.id, e.target.value)}
                       rows={2}
                       placeholder="Notas sobre esta ejecución..."
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                     />
                   </div>
 
@@ -448,18 +508,19 @@ export default function RunExecution({
                                 setPendingDeleteAttachment({ runCaseId: c.id, attachmentId: a.id })
                               }
                               title="Eliminar evidencia"
-                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-700 text-white text-xs leading-none flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600"
+                              aria-label="Eliminar evidencia"
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-700 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 hover:bg-red-600"
                             >
-                              ✕
+                              <X size={12} aria-hidden />
                             </button>
                           </div>
                         );
                       })}
                       <label
                         title="Subir evidencia (imagen o video, máx. 200s)"
-                        className="flex items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
+                        className="flex items-center justify-center w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-brand-400 hover:text-brand-600 shrink-0"
                       >
-                        <span className="text-xl leading-none">+</span>
+                        <ImagePlus size={20} aria-hidden />
                         <input
                           type="file"
                           accept="image/*,video/*"
@@ -475,23 +536,23 @@ export default function RunExecution({
                   </div>
 
                   <div className="flex items-center justify-end">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      icon={Bug}
+                      className="text-red-600"
                       onClick={() => setPendingDefect({ runCaseId: c.id, caseTitle: c.caseTitle })}
-                      className="text-xs text-red-600 hover:underline"
                     >
-                      🐞 Reportar defecto
-                    </button>
+                      Reportar defecto
+                    </Button>
                   </div>
 
                   {c.defects.length > 0 && (
                     <div className="flex gap-2 flex-wrap">
                       {c.defects.map((d) => (
-                        <span
-                          key={d.id}
-                          className="text-xs bg-red-50 text-red-700 border border-red-100 rounded px-2 py-1"
-                        >
-                          🐞 {d.title}
-                        </span>
+                        <Badge key={d.id} tone="danger" icon={Bug}>
+                          {d.title}
+                        </Badge>
                       ))}
                     </div>
                   )}

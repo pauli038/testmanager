@@ -20,6 +20,22 @@ import {
   ReferenceLine,
 } from "recharts";
 import { STATUS_COLORS, BLUE, ORANGE, PURPLE } from "@/lib/dashboard-colors";
+import { Button } from "@/components/ui";
+import {
+  ArrowRight,
+  Bot,
+  Bug,
+  CircleDashed,
+  Clock,
+  Download,
+  FlaskConical,
+  Flag,
+  Minus,
+  RefreshCw,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 
 export type Status = "untested" | "passed" | "failed" | "blocked" | "skipped";
 export type StatusCounts = Record<Status, number>;
@@ -144,11 +160,11 @@ function Card({
   className?: string;
 }) {
   return (
-    <div className={`bg-white border border-slate-200 rounded-xl p-5 ${className}`}>
+    <div className={`bg-white border border-slate-200 rounded-xl shadow-sm p-5 ${className}`}>
       {(title || right) && (
         <div className="flex items-center justify-between gap-3 mb-4">
           {title && (
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               {title}
             </h3>
           )}
@@ -238,20 +254,26 @@ function ReportDownload({ projectId }: { projectId: string }) {
     <div className="flex items-center justify-end gap-2 flex-wrap">
       {errorMsg && <p className="text-sm text-red-600 mr-auto">{errorMsg}</p>}
       <span className="text-sm text-slate-500">Descargar informe:</span>
-      <button
+      <Button
+        size="sm"
+        variant="secondary"
+        icon={Download}
         onClick={() => download("docx")}
-        disabled={downloading !== null}
-        className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50"
+        disabled={downloading !== null && downloading !== "docx"}
+        loading={downloading === "docx"}
       >
-        {downloading === "docx" ? "Generando..." : "⬇ Word"}
-      </button>
-      <button
+        Word
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        icon={Download}
         onClick={() => download("pdf")}
-        disabled={downloading !== null}
-        className="rounded-lg bg-slate-700 text-white text-sm font-medium px-3 py-1.5 hover:bg-slate-800 disabled:opacity-50"
+        disabled={downloading !== null && downloading !== "pdf"}
+        loading={downloading === "pdf"}
       >
-        {downloading === "pdf" ? "Generando..." : "⬇ PDF"}
-      </button>
+        PDF
+      </Button>
     </div>
   );
 }
@@ -270,17 +292,26 @@ function CompletionCard({ completion }: { completion: DashboardData["completion"
       <div className="flex flex-col lg:flex-row gap-6 lg:items-center">
         <div className="lg:w-1/2 min-w-0">
           <div className="flex items-end gap-3 flex-wrap">
-            <span className="text-4xl font-semibold text-slate-900 leading-none">{percent}%</span>
+            <span className="text-4xl font-semibold tracking-tight text-slate-900 leading-none tabular-nums">
+              {percent}%
+            </span>
             <span className="text-sm text-slate-500 pb-1">
               completado · {counts.passed} de {totalCases} casos aprobados
             </span>
           </div>
           <p
-            className={`text-xs mt-2 ${
+            className={`flex items-center gap-1 text-xs mt-2 ${
               change > 0 ? "text-emerald-600" : change < 0 ? "text-red-600" : "text-slate-400"
             }`}
           >
-            {change > 0 ? "▲" : change < 0 ? "▼" : "■"} {change > 0 ? "+" : ""}
+            {change > 0 ? (
+              <TrendingUp size={14} aria-hidden />
+            ) : change < 0 ? (
+              <TrendingDown size={14} aria-hidden />
+            ) : (
+              <Minus size={14} aria-hidden />
+            )}
+            {change > 0 ? "+" : ""}
             {change} puntos en los últimos 30 días
           </p>
           <div className="flex h-3 rounded-full overflow-hidden bg-slate-100 mt-4">
@@ -593,15 +624,15 @@ function ActiveCard({
             <span className="text-2xl font-semibold text-slate-900 leading-none my-0.5">
               {active.count}
             </span>
-            <span className="text-[10px] text-teal-600">{active.notStarted} sin iniciar</span>
+            <span className="text-[10px] text-brand-600">{active.notStarted} sin iniciar</span>
           </div>
         </div>
         <div className="min-w-0 space-y-2">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             Runs activos
           </h3>
-          <p className="text-xs text-slate-600">
-            ⏱{" "}
+          <p className="flex items-center gap-1.5 text-xs text-slate-600">
+            <Clock size={13} className="text-slate-400 shrink-0" aria-hidden />
             <span className="font-medium text-slate-800">
               {active.pending === 0
                 ? "Sin pendientes"
@@ -612,15 +643,17 @@ function ActiveCard({
             {active.pending > 0 && active.daysLeft !== null && "de trabajo estimado"}
             {active.pending > 0 && active.daysLeft === null && "pendientes"}
           </p>
-          <p className="text-xs text-slate-600">
-            👥 <span className="font-medium text-slate-800">{active.contributors}</span>{" "}
-            colaboradores
+          <p className="flex items-center gap-1.5 text-xs text-slate-600">
+            <Users size={13} className="text-slate-400 shrink-0" aria-hidden />
+            <span className="font-medium text-slate-800">{active.contributors}</span> colaboradores
           </p>
-          <p className="text-xs text-slate-600">
-            🐞 <span className="font-medium text-slate-800">{openDefects}</span> defectos abiertos
+          <p className="flex items-center gap-1.5 text-xs text-slate-600">
+            <Bug size={13} className="text-slate-400 shrink-0" aria-hidden />
+            <span className="font-medium text-slate-800">{openDefects}</span> defectos abiertos
           </p>
-          <p className="text-xs text-slate-600">
-            🧪 <span className="font-medium text-slate-800">{totalCases}</span> casos de prueba
+          <p className="flex items-center gap-1.5 text-xs text-slate-600">
+            <FlaskConical size={13} className="text-slate-400 shrink-0" aria-hidden />
+            <span className="font-medium text-slate-800">{totalCases}</span> casos de prueba
           </p>
         </div>
       </div>
@@ -714,12 +747,16 @@ function ActiveRunsCard({
   return (
     <Card className="!p-0 overflow-hidden">
       <div className="flex items-center justify-between gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200">
-        <span className="text-sm font-medium text-teal-700">🏁 Runs en curso</span>
+        <span className="flex items-center gap-2 text-sm font-medium text-brand-700">
+          <Flag size={15} aria-hidden />
+          Runs en curso
+        </span>
         <Link
           href={`/projects/${projectId}/runs`}
-          className="text-xs text-slate-500 hover:text-teal-700"
+          className="flex items-center gap-1 text-xs text-slate-500 hover:text-brand-700"
         >
-          Ver todos →
+          Ver todos
+          <ArrowRight size={13} aria-hidden />
         </Link>
       </div>
       {runs.length === 0 ? (
@@ -744,7 +781,7 @@ function ActiveRunsCard({
                     <td className="px-5 py-2.5 max-w-[200px]">
                       <Link
                         href={`/projects/${projectId}/runs/${run.id}`}
-                        className="block truncate text-slate-800 hover:text-teal-700"
+                        className="block truncate text-slate-800 hover:text-brand-700"
                         title={run.name}
                       >
                         {run.name}
@@ -755,9 +792,14 @@ function ActiveRunsCard({
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <span
-                        className={`text-xs ${notStarted ? "text-slate-500" : "text-blue-600"}`}
+                        className={`flex items-center gap-1 text-xs ${notStarted ? "text-slate-500" : "text-blue-600"}`}
                       >
-                        {notStarted ? "○ Sin iniciar" : "↻ En progreso"}
+                        {notStarted ? (
+                          <CircleDashed size={13} aria-hidden />
+                        ) : (
+                          <RefreshCw size={13} aria-hidden />
+                        )}
+                        {notStarted ? "Sin iniciar" : "En progreso"}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">
@@ -825,8 +867,8 @@ function TestersCard({ testers }: { testers: DashboardData["testers"] }) {
                   <td className="px-5 py-2.5">
                     <div className="flex items-center gap-2 min-w-0">
                       {t.automated ? (
-                        <span className="w-6 h-6 rounded-full bg-slate-100 text-xs flex items-center justify-center shrink-0">
-                          🤖
+                        <span className="w-6 h-6 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                          <Bot size={14} aria-hidden />
                         </span>
                       ) : (
                         <Avatar name={t.name} index={0} />

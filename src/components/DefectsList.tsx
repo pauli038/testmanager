@@ -2,6 +2,34 @@
 
 import { useEffect, useRef, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  Input,
+  Label,
+  Modal,
+  PriorityBadge,
+  Select,
+  Textarea,
+  buttonClasses,
+  cn,
+} from "@/components/ui";
+import {
+  Bug,
+  ChevronDown,
+  Download,
+  Eye,
+  FileText,
+  ImagePlus,
+  Layers,
+  Link2,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 
 type CaseRef = { id: string; title: string };
 type RetestEntry = { id: string; date: string; result: string; comment: string };
@@ -22,18 +50,13 @@ type Defect = {
   attachments: Attachment[];
 };
 
-const severityColors: Record<string, string> = {
-  low: "bg-slate-100 text-slate-600",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
+const statusColors: Record<string, string> = {
+  open: "bg-red-50 text-red-700 ring-red-600/15",
+  in_progress: "bg-amber-50 text-amber-700 ring-amber-600/20",
+  closed: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
 };
 
-const statusColors: Record<string, string> = {
-  open: "bg-red-100 text-red-700",
-  in_progress: "bg-amber-100 text-amber-700",
-  closed: "bg-emerald-100 text-emerald-700",
-};
+const statusTones = { open: "danger", in_progress: "warning", closed: "success" } as const;
 
 const statusLabels: Record<string, string> = {
   open: "Abierto",
@@ -41,11 +64,7 @@ const statusLabels: Record<string, string> = {
   closed: "Cerrado",
 };
 
-const retestResultColors: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  passed: "bg-emerald-100 text-emerald-700",
-  failed: "bg-red-100 text-red-700",
-};
+const retestResultTones = { pending: "warning", passed: "success", failed: "danger" } as const;
 
 const retestResultLabels: Record<string, string> = {
   pending: "Pendiente",
@@ -302,9 +321,10 @@ export default function DefectsList({
           type="button"
           title="Eliminar evidencia"
           onClick={() => setPendingAttachmentDelete({ ...a, defectId })}
-          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-500 text-[10px] leading-none shadow-sm flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+          aria-label="Eliminar evidencia"
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white border border-slate-200 text-slate-500 shadow-sm flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
         >
-          ✕
+          <X size={11} aria-hidden />
         </button>
       </div>
     );
@@ -349,20 +369,15 @@ export default function DefectsList({
         <div className="flex items-center gap-3 flex-wrap">
           <h3 className="text-sm font-medium text-slate-700">Defectos / Bugs</h3>
           <div className="flex items-center gap-1">
-            <input
+            <Input
               type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-600"
+              className="w-auto h-8 text-slate-600"
+              aria-label="Filtrar por fecha"
             />
             {dateFilter && (
-              <button
-                onClick={() => setDateFilter("")}
-                className="text-xs text-slate-400 hover:text-red-600"
-                title="Quitar filtro de fecha"
-              >
-                ✕
-              </button>
+              <IconButton icon={X} label="Quitar filtro de fecha" onClick={() => setDateFilter("")} />
             )}
           </div>
         </div>
@@ -372,8 +387,9 @@ export default function DefectsList({
               type="button"
               onClick={() => setReportPickerOpen((o) => !o)}
               title="Alcance del reporte de defectos"
-              className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-600 max-w-[220px]"
+              className="flex items-center gap-2 h-8 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50 max-w-[240px]"
             >
+              <FileText size={14} className="text-slate-400 shrink-0" aria-hidden />
               <span className="truncate">
                 {reportDefectIds.length === 0
                   ? "Todos los defectos"
@@ -381,18 +397,18 @@ export default function DefectsList({
                   ? defects.find((d) => d.id === reportDefectIds[0])?.title ?? "1 defecto"
                   : `${reportDefectIds.length} defectos seleccionados`}
               </span>
-              <span className="text-slate-400">▾</span>
+              <ChevronDown size={14} className="text-slate-400 shrink-0" aria-hidden />
             </button>
             {reportPickerOpen && (
-              <div className="absolute right-0 z-20 mt-1 w-[min(32rem,90vw)] max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+              <div className="absolute right-0 z-20 mt-1 w-[min(32rem,90vw)] max-h-80 overflow-y-auto rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-900/10">
                 <button
                   type="button"
                   onClick={() => setReportDefectIds([])}
                   className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-slate-50 ${
-                    reportDefectIds.length === 0 ? "font-medium text-teal-700" : "text-slate-700"
+                    reportDefectIds.length === 0 ? "font-medium text-brand-700" : "text-slate-700"
                   }`}
                 >
-                  <input type="checkbox" readOnly checked={reportDefectIds.length === 0} className="accent-teal-600" />
+                  <input type="checkbox" readOnly checked={reportDefectIds.length === 0} className="accent-brand-600" />
                   Todos los defectos
                 </button>
                 <div className="my-1 border-t border-slate-100" />
@@ -405,7 +421,7 @@ export default function DefectsList({
                       type="checkbox"
                       checked={reportDefectIds.includes(d.id)}
                       onChange={() => toggleReportDefect(d.id)}
-                      className="mt-0.5 accent-teal-600"
+                      className="mt-0.5 accent-brand-600"
                     />
                     <span>{d.title}</span>
                   </label>
@@ -413,54 +429,60 @@ export default function DefectsList({
               </div>
             )}
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Download}
             onClick={() => downloadReport("docx")}
-            disabled={downloading !== null}
-            className="text-xs font-medium rounded-lg px-2.5 py-1.5 bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50"
+            disabled={downloading !== null && downloading !== "docx"}
+            loading={downloading === "docx"}
           >
-            {downloading === "docx" ? "Generando..." : "📄 Reporte Word"}
-          </button>
-          <button
+            Word
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Download}
             onClick={() => downloadReport("pdf")}
-            disabled={downloading !== null}
-            className="text-xs font-medium rounded-lg px-2.5 py-1.5 bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-50"
+            disabled={downloading !== null && downloading !== "pdf"}
+            loading={downloading === "pdf"}
           >
-            {downloading === "pdf" ? "Generando..." : "📄 Reporte PDF"}
-          </button>
-          <button
+            PDF
+          </Button>
+          <Button icon={Plus}
+            size="sm"
             onClick={openNew}
-            className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
           >
-            + Nuevo defecto
-          </button>
+            Nuevo defecto
+          </Button>
         </div>
       </div>
 
       <div className="space-y-2">
         {filteredDefects.map((d) => (
-          <div key={d.id} className="bg-white border border-slate-200 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h4 className="font-medium text-slate-900 text-sm">🐞 {d.title}</h4>
+          <div key={d.id} className="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex gap-3 min-w-0">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                  <Bug size={16} aria-hidden />
+                </span>
+                <div className="min-w-0">
+                <button
+                  onClick={() => openViewDefect(d)}
+                  className="font-medium text-slate-900 text-sm text-left hover:text-brand-700"
+                >
+                  {d.title}
+                </button>
                 {d.description && (
                   <p className="text-sm text-slate-500 mt-1">{d.description}</p>
                 )}
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  <span className={`text-xs rounded px-1.5 py-0.5 ${severityColors[d.severity]}`}>
-                    {d.severity}
-                  </span>
-                  {d.module && (
-                    <span className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5">
-                      🧩 {d.module}
-                    </span>
-                  )}
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  <PriorityBadge priority={d.severity} />
+                  {d.module && <Badge icon={Layers}>{d.module}</Badge>}
                   {d.cases.map((c) => (
-                    <span
-                      key={c.id}
-                      className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5"
-                    >
-                      🔗 {c.title}
-                    </span>
+                    <Badge key={c.id} icon={Link2} className="max-w-full truncate">
+                      {c.title}
+                    </Badge>
                   ))}
                 </div>
                 <div className="mt-3">
@@ -471,9 +493,9 @@ export default function DefectsList({
                       .map((a) => evidenceThumb(d.id, a, "w-14 h-14"))}
                     <label
                       title="Subir evidencia"
-                      className="flex items-center justify-center w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
+                      className="flex items-center justify-center w-14 h-14 rounded-lg border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-brand-400 hover:text-brand-600 shrink-0"
                     >
-                      <span className="text-xl leading-none">+</span>
+                      <ImagePlus size={18} aria-hidden />
                       <input
                         type="file"
                         accept="image/*"
@@ -487,103 +509,103 @@ export default function DefectsList({
                     </label>
                   </div>
                 </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 shrink-0">
                 <select
                   value={d.status}
                   onChange={(e) => updateStatus(d.id, e.target.value)}
-                  className={`text-xs rounded px-2 py-1 border-0 ${statusColors[d.status]}`}
+                  aria-label="Estado del defecto"
+                  className={cn(
+                    "text-xs font-medium rounded-md px-2 h-7 border-0 ring-1 ring-inset cursor-pointer mr-1",
+                    statusColors[d.status]
+                  )}
                 >
                   <option value="open">Abierto</option>
                   <option value="in_progress">En progreso</option>
                   <option value="closed">Cerrado</option>
                 </select>
-                <button
-                  onClick={() => openViewDefect(d)}
-                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
-                >
-                  Ver
-                </button>
-                <button
-                  onClick={() => openEditDefect(d)}
-                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100"
-                >
-                  Editar
-                </button>
-                <button
+                <IconButton icon={Eye} label="Ver defecto" onClick={() => openViewDefect(d)} />
+                <IconButton icon={Pencil} label="Editar defecto" onClick={() => openEditDefect(d)} />
+                <IconButton
+                  icon={Trash2}
+                  label="Eliminar defecto"
+                  tone="danger"
                   onClick={() => setPendingDelete(d.id)}
-                  className="text-xs font-medium rounded-lg px-2 py-1 bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                >
-                  ✕
-                </button>
+                />
               </div>
             </div>
           </div>
         ))}
         {filteredDefects.length === 0 && (
-          <p className="text-sm text-slate-400 py-10 text-center border border-dashed border-slate-300 rounded-xl">
-            {defects.length === 0
-              ? "No hay defectos reportados. También puedes crearlos directamente desde un test run al marcar un caso como Failed."
-              : "No hay defectos que coincidan con este filtro."}
-          </p>
+          defects.length === 0 ? (
+            <EmptyState
+              icon={Bug}
+              title="No hay defectos reportados"
+              description="También puedes crearlos directamente desde un test run al marcar un caso como Failed."
+              action={
+                <Button icon={Plus} size="sm" onClick={openNew}>
+                  Nuevo defecto
+                </Button>
+              }
+            />
+          ) : (
+            <EmptyState title="No hay defectos que coincidan con este filtro" />
+          )
         )}
       </div>
 
       {open && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">
-              {editingDefect ? "Editar defecto" : "Nuevo defecto"}
-            </h2>
+        <Modal
+          onClose={() => {
+            setOpen(false);
+            setEditingDefect(null);
+          }}
+          title={editingDefect ? "Editar defecto" : "Nuevo defecto"}
+        >
             <form onSubmit={saveDefect} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Título</label>
-                <input
+                <Label>Título</Label>
+                <Input
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Descripción</label>
-                <textarea
+                <Label>Descripción</Label>
+                <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm text-slate-700">Pasos a reproducir</label>
-                  <button
-                    type="button"
-                    onClick={addStep}
-                    className="text-xs text-teal-600 hover:underline"
-                  >
-                    + agregar paso
-                  </button>
+                  <Label className="mb-0">Pasos a reproducir</Label>
+                  <Button variant="soft" size="xs" icon={Plus} onClick={addStep}>
+                    Agregar paso
+                  </Button>
                 </div>
                 <div className="space-y-2">
                   {steps.map((s, i) => (
                     <div key={i} className="flex gap-2 items-start">
                       <span className="text-xs text-slate-400 mt-2 w-4">{i + 1}.</span>
-                      <textarea
+                      <Textarea
                         placeholder="Descripción"
                         value={s}
                         onChange={(e) => updateStep(i, e.target.value)}
                         rows={1}
-                        className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                        className="flex-1"
                       />
-                      <button
-                        type="button"
+                      <IconButton
+                        icon={X}
+                        label="Quitar paso"
+                        tone="danger"
                         onClick={() => removeStep(i)}
-                        className="text-slate-400 hover:text-red-600 mt-1.5"
-                      >
-                        ✕
-                      </button>
+                        className="mt-0.5"
+                      />
                     </div>
                   ))}
                 </div>
@@ -591,54 +613,50 @@ export default function DefectsList({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1">Severidad</label>
-                  <select
+                  <Label>Severidad</Label>
+                  <Select
                     value={severity}
                     onChange={(e) => setSeverity(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
                   >
                     <option value="low">Baja</option>
                     <option value="medium">Media</option>
                     <option value="high">Alta</option>
                     <option value="critical">Crítica</option>
-                  </select>
+                  </Select>
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1">Fecha de detección</label>
-                  <input
+                  <Label>Fecha de detección</Label>
+                  <Input
                     type="date"
                     value={detectedAt}
                     onChange={(e) => setDetectedAt(e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1">Módulo / Sección</label>
-                  <input
+                  <Label>Módulo / Sección</Label>
+                  <Input
                     value={moduleField}
                     onChange={(e) => setModuleField(e.target.value)}
                     placeholder="Ej. Cobros Judiciales → Tramitados"
-                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1">Ambiente</label>
-                  <input
+                  <Label>Ambiente</Label>
+                  <Input
                     value={environment}
                     onChange={(e) => setEnvironment(e.target.value)}
                     placeholder="Ej. URL de pruebas"
-                    className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm text-slate-700 mb-1">
+                <Label>
                   Casos de prueba relacionados
-                </label>
+                </Label>
                 {cases.length ? (
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
                     {cases.map((c) => (
@@ -665,48 +683,42 @@ export default function DefectsList({
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm text-slate-700">Re-test</label>
-                  <button
-                    type="button"
-                    onClick={addRetest}
-                    className="text-xs text-teal-600 hover:underline"
-                  >
-                    + agregar re-test
-                  </button>
+                  <Label className="mb-0">Re-test</Label>
+                  <Button variant="soft" size="xs" icon={Plus} onClick={addRetest}>
+                    Agregar re-test
+                  </Button>
                 </div>
                 <div className="space-y-2">
                   {retests.map((r, i) => (
                     <div key={i} className="rounded-lg border border-slate-200 p-2.5 space-y-2">
                       <div className="flex gap-2 items-center">
-                        <input
+                        <Input
                           type="date"
                           value={r.date}
                           onChange={(e) => updateRetest(i, "date", e.target.value)}
-                          className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                          className="flex-1 h-8"
                         />
-                        <select
+                        <Select
                           value={r.result}
                           onChange={(e) => updateRetest(i, "result", e.target.value)}
-                          className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                          className="w-auto h-8"
                         >
                           <option value="pending">Pendiente</option>
                           <option value="passed">Aprobado</option>
                           <option value="failed">Fallido</option>
-                        </select>
-                        <button
-                          type="button"
+                        </Select>
+                        <IconButton
+                          icon={X}
+                          label="Quitar re-test"
+                          tone="danger"
                           onClick={() => removeRetest(i)}
-                          className="text-slate-400 hover:text-red-600"
-                        >
-                          ✕
-                        </button>
+                        />
                       </div>
-                      <textarea
+                      <Textarea
                         placeholder="Comentario del re-test"
                         value={r.comment}
                         onChange={(e) => updateRetest(i, "comment", e.target.value)}
                         rows={1}
-                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
                       />
                     </div>
                   ))}
@@ -717,43 +729,57 @@ export default function DefectsList({
               </div>
 
               <div className="flex justify-end gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   type="button"
                   onClick={() => {
                     setOpen(false);
                     setEditingDefect(null);
                   }}
-                  className="text-sm text-slate-600 px-4 py-2"
                 >
                   Cancelar
-                </button>
-                <button className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700">
+                </Button>
+                <Button type="submit">
                   {editingDefect ? "Guardar" : "Crear"}
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {viewingDefect && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex items-start justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">🐞 {viewingDefect.title}</h2>
-              <span
-                className={`text-xs rounded px-1.5 py-0.5 whitespace-nowrap ml-2 ${statusColors[viewingDefect.status]}`}
+        <Modal
+          onClose={() => setViewingDefect(null)}
+          size="lg"
+          title={
+            <span className="flex items-center gap-2">
+              <Bug size={18} className="text-red-600 shrink-0" aria-hidden />
+              {viewingDefect.title}
+            </span>
+          }
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setViewingDefect(null)}>
+                Cerrar
+              </Button>
+              <Button
+                icon={Pencil}
+                onClick={() => {
+                  const d = viewingDefect;
+                  setViewingDefect(null);
+                  openEditDefect(d);
+                }}
               >
+                Editar
+              </Button>
+            </>
+          }
+        >
+            <div className="flex gap-1.5 mb-5">
+              <Badge tone={statusTones[viewingDefect.status as keyof typeof statusTones] ?? "neutral"}>
                 {statusLabels[viewingDefect.status] || viewingDefect.status}
-              </span>
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <span
-                className={`text-xs rounded px-1.5 py-0.5 ${severityColors[viewingDefect.severity]}`}
-              >
-                {viewingDefect.severity}
-              </span>
+              </Badge>
+              <PriorityBadge priority={viewingDefect.severity} />
             </div>
 
             {viewingDefect.description && (
@@ -824,12 +850,9 @@ export default function DefectsList({
                 </h3>
                 <div className="flex flex-wrap gap-1.5">
                   {viewingDefect.cases.map((c) => (
-                    <span
-                      key={c.id}
-                      className="text-xs bg-slate-50 border border-slate-200 text-slate-500 rounded px-1.5 py-0.5"
-                    >
-                      🔗 {c.title}
-                    </span>
+                    <Badge key={c.id} icon={Link2}>
+                      {c.title}
+                    </Badge>
                   ))}
                 </div>
               </div>
@@ -846,11 +869,12 @@ export default function DefectsList({
                         <div key={r.id} className="rounded-lg border border-slate-100 p-2 text-sm space-y-2">
                           <div className="flex items-start gap-3">
                             <span className="text-slate-500 shrink-0">{r.date || "—"}</span>
-                            <span
-                              className={`shrink-0 text-xs rounded px-1.5 py-0.5 ${retestResultColors[r.result] || ""}`}
+                            <Badge
+                              tone={retestResultTones[r.result as keyof typeof retestResultTones] ?? "neutral"}
+                              className="shrink-0"
                             >
                               {retestResultLabels[r.result] || r.result}
-                            </span>
+                            </Badge>
                             {r.comment && (
                               <p className="text-slate-600 whitespace-pre-wrap">{r.comment}</p>
                             )}
@@ -861,9 +885,9 @@ export default function DefectsList({
                               .map((a) => evidenceThumb(viewingDefect.id, a, "w-12 h-12"))}
                             <label
                               title="Subir evidencia del re-test"
-                              className="flex items-center justify-center w-12 h-12 rounded border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-teal-400 hover:text-teal-600 shrink-0"
+                              className="flex items-center justify-center w-12 h-12 rounded border-2 border-dashed border-slate-300 text-slate-400 cursor-pointer hover:border-brand-400 hover:text-brand-600 shrink-0"
                             >
-                              <span className="text-lg leading-none">+</span>
+                              <ImagePlus size={16} aria-hidden />
                               <input
                                 type="file"
                                 accept="image/*"
@@ -895,35 +919,16 @@ export default function DefectsList({
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => setViewingDefect(null)}
-                className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
-              >
-                Cerrar
-              </button>
-              <button
-                onClick={() => {
-                  const d = viewingDefect;
-                  setViewingDefect(null);
-                  openEditDefect(d);
-                }}
-                className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700"
-              >
-                Editar
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {viewingImage && (
         <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] p-4"
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
           onClick={() => setViewingImage(null)}
         >
           <div
-            className="bg-white rounded-xl shadow-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white rounded-2xl shadow-xl ring-1 ring-slate-900/5 max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-3 p-3 border-b border-slate-100">
@@ -932,22 +937,21 @@ export default function DefectsList({
                 <a
                   href={viewingImage.url}
                   download={viewingImage.filename}
-                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100"
+                  className={buttonClasses({ variant: "soft", size: "xs" })}
                 >
-                  ⬇ Descargar
+                  <Download size={14} aria-hidden />
+                  Descargar
                 </a>
-                <button
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  icon={Trash2}
+                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
                   onClick={() => setPendingAttachmentDelete(viewingImage)}
-                  className="text-xs font-medium rounded-lg px-2.5 py-1 bg-red-50 text-red-600 hover:bg-red-100"
                 >
-                  🗑 Eliminar
-                </button>
-                <button
-                  onClick={() => setViewingImage(null)}
-                  className="text-xs font-medium rounded-lg px-2 py-1 bg-slate-100 text-slate-500 hover:bg-slate-200"
-                >
-                  ✕
-                </button>
+                  Eliminar
+                </Button>
+                <IconButton icon={X} label="Cerrar" onClick={() => setViewingImage(null)} />
               </div>
             </div>
             <div className="overflow-auto p-4 flex items-center justify-center bg-slate-50">

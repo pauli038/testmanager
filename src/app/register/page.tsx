@@ -4,6 +4,8 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import AuthShell from "@/components/AuthShell";
+import { Button, Input, Label } from "@/components/ui";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -35,63 +37,52 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <div className="w-full max-w-sm bg-white rounded-xl shadow p-8">
-        <h1 className="text-xl font-semibold text-slate-900 mb-1">
+    <AuthShell title="Crear cuenta" subtitle="El primer usuario registrado será administrador.">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <Label>Nombre</Label>
+          <Input
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Correo</Label>
+          <Input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>
+            Contraseña
+          </Label>
+          <Input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <Button
+          fullWidth
+          type="submit"
+          loading={loading}
+        >
           Crear cuenta
-        </h1>
-        <p className="text-sm text-slate-500 mb-6">
-          El primer usuario registrado será administrador
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">Nombre</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">Correo</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-slate-700 mb-1">
-              Contraseña
-            </label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-lg bg-teal-600 text-white text-sm font-medium py-2 hover:bg-teal-700 disabled:opacity-50"
-          >
-            {loading ? "Creando..." : "Crear cuenta"}
-          </button>
-        </form>
-        <p className="text-sm text-slate-500 mt-4">
-          ¿Ya tienes cuenta?{" "}
-          <Link href="/login" className="text-teal-600 hover:underline">
-            Inicia sesión
-          </Link>
-        </p>
-      </div>
-    </div>
+        </Button>
+      </form>
+      <p className="text-sm text-slate-500 mt-6 text-center">
+        ¿Ya tienes cuenta?{" "}
+        <Link href="/login" className="text-brand-600 hover:underline">
+          Inicia sesión
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

@@ -7,6 +7,8 @@ import Link from "next/link";
 import NewProjectButton from "@/components/NewProjectButton";
 import EditProjectButton from "@/components/EditProjectButton";
 import { canManageProject } from "@/lib/permissions";
+import { FlaskConical, FolderPlus, PlayCircle } from "lucide-react";
+import { EmptyState, PageHeader } from "@/components/ui";
 
 export default async function HomePage() {
   const session = await auth();
@@ -41,20 +43,20 @@ export default async function HomePage() {
 
   return (
     <div className="w-full px-4 sm:px-8 py-10">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Proyectos</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Organiza tus casos de prueba, ejecuciones y defectos por proyecto.
-          </p>
-        </div>
-        <NewProjectButton />
-      </div>
+      <PageHeader
+        title="Proyectos"
+        description="Organiza tus casos de prueba, ejecuciones y defectos por proyecto."
+        actions={<NewProjectButton />}
+        className="mb-8"
+      />
 
       {projects.length === 0 ? (
-        <div className="text-center py-20 border border-dashed border-slate-300 rounded-xl">
-          <p className="text-slate-500">Aún no tienes proyectos.</p>
-        </div>
+        <EmptyState
+          icon={FolderPlus}
+          title="Aún no tienes proyectos"
+          description="Crea tu primer proyecto para empezar a organizar casos de prueba, runs y defectos."
+          className="py-20"
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((p) => {
@@ -63,15 +65,23 @@ export default async function HomePage() {
               <div key={p.id} className="relative">
                 <Link
                   href={`/projects/${p.id}`}
-                  className="block h-full bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md hover:border-teal-300 transition"
+                  className="group flex flex-col h-full bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-brand-300 transition"
                 >
-                  <h2 className={`font-medium text-slate-900 ${canEdit ? "pr-8" : ""}`}>{p.name}</h2>
+                  <h2 className={`font-semibold text-slate-900 group-hover:text-brand-700 transition-colors ${canEdit ? "pr-8" : ""}`}>
+                    {p.name}
+                  </h2>
                   <p className="text-sm text-slate-500 mt-1 line-clamp-2">
                     {p.description || "Sin descripción"}
                   </p>
-                  <div className="flex gap-4 mt-4 text-xs text-slate-500">
-                    <span>🧪 {s?.cases ?? 0} casos</span>
-                    <span>▶️ {s?.runs ?? 0} runs</span>
+                  <div className="flex gap-4 mt-auto pt-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1.5">
+                      <FlaskConical size={14} className="text-slate-400" aria-hidden />
+                      <span className="font-medium text-slate-700 tabular-nums">{s?.cases ?? 0}</span> casos
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <PlayCircle size={14} className="text-slate-400" aria-hidden />
+                      <span className="font-medium text-slate-700 tabular-nums">{s?.runs ?? 0}</span> runs
+                    </span>
                   </div>
                   {p.creator?.name && (
                     <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">

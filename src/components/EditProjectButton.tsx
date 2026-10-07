@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button, IconButton, Input, Label, Modal, Textarea } from "@/components/ui";
+import { Pencil } from "lucide-react";
 
 export default function EditProjectButton({
   project,
@@ -52,65 +54,41 @@ export default function EditProjectButton({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openModal}
-        title="Editar proyecto"
-        aria-label="Editar proyecto"
-        className="rounded-lg p-1.5 text-slate-400 hover:text-teal-700 hover:bg-teal-50"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="w-4 h-4"
-        >
-          <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793ZM11.379 5.793 3 14.172V17h2.828l8.38-8.379-2.83-2.828Z" />
-        </svg>
-      </button>
+      <IconButton icon={Pencil} label="Editar proyecto" onClick={openModal} className="hover:!text-brand-700 hover:!bg-brand-50" />
       {open && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold text-slate-900 mb-4">Editar proyecto</h2>
+        <Modal onClose={() => setOpen(false)} title="Editar proyecto">
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Nombre</label>
-                <input
+                <Label>Nombre</Label>
+                <Input
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-700 mb-1">Descripción</label>
-                <textarea
+                <Label>Descripción</Label>
+                <Textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   rows={3}
                 />
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex justify-end gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
                 >
                   Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
-                >
-                  {loading ? "Guardando..." : "Guardar"}
-                </button>
+                </Button>
+                <Button type="submit" loading={loading}>
+                  Guardar
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
+        </Modal>
       )}
     </>
   );

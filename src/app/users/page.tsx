@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import UsersManager from "@/components/UsersManager";
+import { PageHeader } from "@/components/ui";
 
 export default async function UsersPage() {
   const session = await auth();
@@ -15,14 +16,11 @@ export default async function UsersPage() {
     .orderBy(asc(users.name));
 
   return (
-    <div className="w-full px-4 sm:px-8 py-10">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Usuarios</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Todos los usuarios registrados pueden ver y trabajar en todos los proyectos. Los roles
-          admin y lead pueden gestionar proyectos y defectos.
-        </p>
-      </div>
+    <div className="w-full max-w-4xl px-4 sm:px-8 py-10">
+      <PageHeader
+        title="Usuarios"
+        description="Todos los usuarios registrados pueden ver y trabajar en todos los proyectos. Los roles admin y lead pueden gestionar proyectos y defectos."
+      />
       <UsersManager
         initialUsers={allUsers}
         currentUserId={session.user.id}

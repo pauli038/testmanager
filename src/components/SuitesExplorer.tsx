@@ -5,6 +5,22 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "./ConfirmModal";
 import { CSV_TEMPLATE, parseCsv, rowsToCases } from "@/lib/csv";
+import {
+  AutomatedBadge,
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  Input,
+  Label,
+  Modal,
+  PriorityBadge,
+  Select,
+  StatusBadge,
+  Textarea,
+  type RunStatus,
+} from "@/components/ui";
+import { Eye, FileText, Folder, FolderOpen, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 
 type Suite = { id: string; name: string; description: string | null };
 type Step = { step: string; expected: string };
@@ -22,19 +38,8 @@ type TestCase = {
   lastStatus?: string | null;
 };
 
-const priorityColors: Record<string, string> = {
-  low: "bg-slate-100 text-slate-600",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  critical: "bg-red-100 text-red-700",
-};
-
-const lastStatusConfig: Record<string, { icon: string; classes: string; label: string }> = {
-  passed: { icon: "✅", classes: "bg-emerald-100 text-emerald-700", label: "Passed" },
-  failed: { icon: "❌", classes: "bg-red-100 text-red-700", label: "Failed" },
-  blocked: { icon: "🚫", classes: "bg-orange-100 text-orange-700", label: "Blocked" },
-  skipped: { icon: "⏭️", classes: "bg-slate-100 text-slate-500", label: "Skipped" },
-};
+const isRunStatus = (s: string | null | undefined): s is RunStatus =>
+  s === "passed" || s === "failed" || s === "blocked" || s === "skipped";
 
 export default function SuitesExplorer({
   projectId,
@@ -136,62 +141,71 @@ export default function SuitesExplorer({
 
   const headerActions = selectedSuite && (
     <>
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={Upload}
         onClick={() => setShowImportModal(true)}
-        className="rounded-lg border border-slate-300 text-slate-700 text-sm font-medium px-3 py-1.5 hover:bg-slate-50"
       >
-        ⬆️ Importar casos
-      </button>
-      <button
+        Importar casos
+      </Button>
+      <Button icon={Plus}
+        size="sm"
         onClick={openNewCase}
-        className="rounded-lg bg-teal-600 text-white text-sm font-medium px-3 py-1.5 hover:bg-teal-700"
       >
-        + Nuevo caso
-      </button>
+        Nuevo caso
+      </Button>
     </>
   );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       <div className="lg:col-span-1">
-        <h3 className="text-sm font-medium text-slate-700 mb-2">Suites</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Suites</h3>
         <form onSubmit={createSuite} className="flex gap-2 mb-3">
-          <input
+          <Input
             value={newSuiteName}
             onChange={(e) => setNewSuiteName(e.target.value)}
             placeholder="Nueva suite..."
-            className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="flex-1 h-8"
           />
-          <button className="rounded-lg bg-teal-600 text-white px-3 text-sm hover:bg-teal-700">
-            +
-          </button>
+          <Button type="submit" size="sm" icon={Plus} aria-label="Crear suite" className="px-2.5" />
         </form>
         <ul className="space-y-1">
           {suites.map((s) => (
             <li key={s.id}>
               <div
-                className={`group flex items-center justify-between rounded-lg px-3 py-2 text-sm cursor-pointer ${
+                className={`group flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-sm cursor-pointer transition-colors ${
                   selectedSuite === s.id
-                    ? "bg-teal-50 text-teal-700"
+                    ? "bg-brand-50 text-brand-700 font-medium"
                     : "hover:bg-slate-100 text-slate-700"
                 }`}
                 onClick={() => setSelectedSuite(s.id)}
               >
-                <span>
-                  📁 {s.name}{" "}
-                  <span className="text-xs text-slate-400">
-                    ({casesBySuite[s.id]?.length ?? 0})
-                  </span>
+                <span className="flex items-center gap-2 min-w-0">
+                  {selectedSuite === s.id ? (
+                    <FolderOpen size={15} className="shrink-0 text-brand-600" aria-hidden />
+                  ) : (
+                    <Folder size={15} className="shrink-0 text-slate-400" aria-hidden />
+                  )}
+                  <span className="truncate">{s.name}</span>
                 </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDeleteSuite(s.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-600 text-xs"
-                >
-                  ✕
-                </button>
+                <span className="flex items-center gap-1 shrink-0">
+                  <span className="text-xs tabular-nums text-slate-400 group-hover:hidden">
+                    {casesBySuite[s.id]?.length ?? 0}
+                  </span>
+                  <IconButton
+                    icon={Trash2}
+                    label="Eliminar suite"
+                    size="sm"
+                    tone="danger"
+                    className="hidden group-hover:inline-flex"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPendingDeleteSuite(s.id);
+                    }}
+                  />
+                </span>
               </div>
             </li>
           ))}
@@ -218,7 +232,7 @@ export default function SuitesExplorer({
               {currentCases.map((c) => (
                 <div
                   key={c.id}
-                  className={`bg-white border rounded-lg p-4 hover:border-teal-300 ${
+                  className={`bg-white border rounded-xl p-4 shadow-sm hover:border-brand-300 transition-colors ${
                     c.lastStatus === "passed"
                       ? "border-l-4 border-l-emerald-500 border-slate-200"
                       : c.lastStatus === "failed"
@@ -226,34 +240,21 @@ export default function SuitesExplorer({
                       : "border-slate-200"
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-medium text-slate-900 text-sm">
-                          {c.title}
-                        </h4>
-                        {c.automated && (
-                          <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5">
-                            🤖 automatizado
-                          </span>
-                        )}
-                        {c.lastStatus && lastStatusConfig[c.lastStatus] && (
-                          <span
-                            className={`text-xs font-medium rounded-full px-2.5 py-1 ${lastStatusConfig[c.lastStatus].classes}`}
-                          >
-                            {lastStatusConfig[c.lastStatus].icon} {lastStatusConfig[c.lastStatus].label}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <span
-                          className={`text-xs rounded px-1.5 py-0.5 ${priorityColors[c.priority]}`}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => openViewCase(c)}
+                          className="font-medium text-slate-900 text-sm text-left hover:text-brand-700"
                         >
-                          {c.priority}
-                        </span>
-                        <span className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
-                          {c.type}
-                        </span>
+                          {c.title}
+                        </button>
+                        {c.automated && <AutomatedBadge />}
+                        {isRunStatus(c.lastStatus) && <StatusBadge status={c.lastStatus} />}
+                      </div>
+                      <div className="flex gap-1.5 mt-2 flex-wrap">
+                        <PriorityBadge priority={c.priority} />
+                        <Badge>{typeLabels[c.type] || c.type}</Badge>
                         {c.tags &&
                           c.tags.split(",").filter(Boolean).map((t) => (
                             <span
@@ -265,33 +266,30 @@ export default function SuitesExplorer({
                           ))}
                       </div>
                     </div>
-                    <div className="flex gap-3 text-xs">
-                      <button
-                        onClick={() => openViewCase(c)}
-                        className="text-slate-600 hover:underline"
-                      >
-                        Ver
-                      </button>
-                      <button
-                        onClick={() => openEditCase(c)}
-                        className="text-teal-600 hover:underline"
-                      >
-                        Editar
-                      </button>
-                      <button
+                    <div className="flex gap-0.5 shrink-0">
+                      <IconButton icon={Eye} label="Ver caso" onClick={() => openViewCase(c)} />
+                      <IconButton icon={Pencil} label="Editar caso" onClick={() => openEditCase(c)} />
+                      <IconButton
+                        icon={Trash2}
+                        label="Eliminar caso"
+                        tone="danger"
                         onClick={() => setPendingDeleteCase({ caseId: c.id, suiteId: c.suiteId })}
-                        className="text-red-600 hover:underline"
-                      >
-                        Eliminar
-                      </button>
+                      />
                     </div>
                   </div>
                 </div>
               ))}
               {currentCases.length === 0 && (
-                <p className="text-sm text-slate-400 py-10 text-center border border-dashed border-slate-300 rounded-xl">
-                  No hay casos en esta suite todavía.
-                </p>
+                <EmptyState
+                  icon={FileText}
+                  title="No hay casos en esta suite todavía"
+                  description="Crea uno nuevo o impórtalos desde un CSV."
+                  action={
+                    <Button icon={Plus} size="sm" onClick={openNewCase}>
+                      Nuevo caso
+                    </Button>
+                  }
+                />
               )}
             </div>
           </>
@@ -352,13 +350,6 @@ export default function SuitesExplorer({
   );
 }
 
-const priorityLabels: Record<string, string> = {
-  low: "Baja",
-  medium: "Media",
-  high: "Alta",
-  critical: "Crítica",
-};
-
 const typeLabels: Record<string, string> = {
   functional: "Funcional",
   regression: "Regresión",
@@ -381,37 +372,26 @@ function ViewCaseModal({
   const tags = testCase.tags?.split(",").filter(Boolean) || [];
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-        <div className="flex items-start justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">{testCase.title}</h2>
-          <div className="flex items-center gap-2 shrink-0 ml-2">
-            {testCase.automated && (
-              <span className="text-xs bg-purple-100 text-purple-700 rounded px-1.5 py-0.5 whitespace-nowrap">
-                🤖 automatizado
-              </span>
-            )}
-            {testCase.lastStatus && lastStatusConfig[testCase.lastStatus] && (
-              <span
-                className={`text-xs font-medium rounded-full px-2.5 py-1 whitespace-nowrap ${
-                  lastStatusConfig[testCase.lastStatus].classes
-                }`}
-              >
-                {lastStatusConfig[testCase.lastStatus].icon} {lastStatusConfig[testCase.lastStatus].label}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <span
-            className={`text-xs rounded px-1.5 py-0.5 ${priorityColors[testCase.priority]}`}
-          >
-            {priorityLabels[testCase.priority] || testCase.priority}
-          </span>
-          <span className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
-            {typeLabels[testCase.type] || testCase.type}
-          </span>
+    <Modal
+      onClose={onClose}
+      size="lg"
+      title={testCase.title}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cerrar
+          </Button>
+          <Button icon={Pencil} onClick={onEdit}>
+            Editar
+          </Button>
+        </>
+      }
+    >
+        <div className="flex gap-1.5 mb-5 flex-wrap">
+          {isRunStatus(testCase.lastStatus) && <StatusBadge status={testCase.lastStatus} />}
+          {testCase.automated && <AutomatedBadge />}
+          <PriorityBadge priority={testCase.priority} />
+          <Badge>{typeLabels[testCase.type] || testCase.type}</Badge>
           {tags.map((t) => (
             <span
               key={t}
@@ -442,7 +422,9 @@ function ViewCaseModal({
                   key={i}
                   className="flex gap-3 items-start bg-slate-50 border border-slate-200 rounded-lg p-3"
                 >
-                  <span className="text-xs text-slate-400 mt-0.5 w-4">{i + 1}.</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 text-[11px] font-medium text-slate-500 tabular-nums">
+                    {i + 1}
+                  </span>
                   <div className="flex-1">
                     <p className="text-sm text-slate-800 whitespace-pre-wrap">{s.step}</p>
                   </div>
@@ -463,26 +445,10 @@ function ViewCaseModal({
             <h3 className="text-sm font-medium text-slate-700 mb-1">
               ID/título del test en Playwright
             </h3>
-            <p className="text-sm text-slate-600">{testCase.automationId}</p>
+            <p className="text-sm text-slate-600 font-mono break-all">{testCase.automationId}</p>
           </div>
         )}
-
-        <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-          <button
-            onClick={onClose}
-            className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
-          >
-            Cerrar
-          </button>
-          <button
-            onClick={onEdit}
-            className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700"
-          >
-            Editar
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -553,53 +519,49 @@ function CaseModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          {existing ? "Editar caso de prueba" : "Nuevo caso de prueba"}
-        </h2>
+    <Modal
+      onClose={onClose}
+      size="lg"
+      title={existing ? "Editar caso de prueba" : "Nuevo caso de prueba"}
+    >
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-700 mb-1">Título</label>
-            <input
+            <Label>Título</Label>
+            <Input
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
           <div>
-            <label className="block text-sm text-slate-700 mb-1">
+            <Label>
               Precondiciones
-            </label>
-            <textarea
+            </Label>
+            <Textarea
               value={preconditions}
               onChange={(e) => setPreconditions(e.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm text-slate-700 mb-1">Prioridad</label>
-              <select
+              <Label>Prioridad</Label>
+              <Select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
               >
                 <option value="low">Baja</option>
                 <option value="medium">Media</option>
                 <option value="high">Alta</option>
                 <option value="critical">Crítica</option>
-              </select>
+              </Select>
             </div>
             <div>
-              <label className="block text-sm text-slate-700 mb-1">Tipo</label>
-              <select
+              <Label>Tipo</Label>
+              <Select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
               >
                 <option value="functional">Funcional</option>
                 <option value="regression">Regresión</option>
@@ -607,58 +569,53 @@ function CaseModal({
                 <option value="e2e">E2E</option>
                 <option value="api">API</option>
                 <option value="other">Otro</option>
-              </select>
+              </Select>
             </div>
             <div>
-              <label className="block text-sm text-slate-700 mb-1">
+              <Label>
                 Tags (coma)
-              </label>
-              <input
+              </Label>
+              <Input
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
               />
             </div>
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm text-slate-700">
+              <Label className="mb-0">
                 Pasos y resultado esperado
-              </label>
-              <button
-                type="button"
-                onClick={addStep}
-                className="text-xs text-teal-600 hover:underline"
-              >
-                + agregar paso
-              </button>
+              </Label>
+              <Button variant="soft" size="xs" icon={Plus} onClick={addStep}>
+                Agregar paso
+              </Button>
             </div>
             <div className="space-y-2">
               {steps.map((s, i) => (
                 <div key={i} className="flex gap-2 items-start">
-                  <span className="text-xs text-slate-400 mt-2 w-4">{i + 1}.</span>
-                  <textarea
+                  <span className="text-xs text-slate-400 mt-2.5 w-4 tabular-nums">{i + 1}.</span>
+                  <Textarea
                     placeholder="Paso"
                     value={s.step}
                     onChange={(e) => updateStep(i, "step", e.target.value)}
                     rows={1}
-                    className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                    className="flex-1"
                   />
-                  <textarea
+                  <Textarea
                     placeholder="Resultado esperado"
                     value={s.expected}
                     onChange={(e) => updateStep(i, "expected", e.target.value)}
                     rows={1}
-                    className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                    className="flex-1"
                   />
-                  <button
-                    type="button"
+                  <IconButton
+                    icon={X}
+                    label="Quitar paso"
+                    tone="danger"
                     onClick={() => removeStep(i)}
-                    className="text-slate-400 hover:text-red-600 mt-1.5"
-                  >
-                    ✕
-                  </button>
+                    className="mt-0.5"
+                  />
                 </div>
               ))}
             </div>
@@ -668,40 +625,39 @@ function CaseModal({
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
+                className="h-4 w-4 rounded accent-brand-600"
                 checked={automated}
                 onChange={(e) => setAutomated(e.target.checked)}
               />
               Caso automatizado (Playwright)
             </label>
             {automated && (
-              <input
+              <Input
                 placeholder="ID/título del test en Playwright"
                 value={automationId}
                 onChange={(e) => setAutomationId(e.target.value)}
-                className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+                className="flex-1 h-8"
               />
             )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button
+            <Button
+              variant="secondary"
               type="button"
               onClick={onClose}
-              className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
             >
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={loading}
-              className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
+              loading={loading}
             >
-              {loading ? "Guardando..." : "Guardar"}
-            </button>
+              Guardar
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -803,13 +759,28 @@ function ImportCsvModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-xl max-h-[90vh] overflow-y-auto p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">Importar casos desde CSV o Excel</h2>
-        <p className="text-sm text-slate-500 mb-4">
-          Se importan a la suite seleccionada. Si un caso con el mismo título ya existe en esta
-          suite, se actualiza en lugar de duplicarse.
-        </p>
+    <Modal
+      onClose={onClose}
+      title="Importar casos desde CSV o Excel"
+      description="Se importan a la suite seleccionada. Si un caso con el mismo título ya existe en esta suite, se actualiza en lugar de duplicarse."
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {summary ? "Cerrar" : "Cancelar"}
+          </Button>
+          {!summary && (
+            <Button
+              icon={Upload}
+              disabled={parsedCases.length === 0}
+              loading={loading}
+              onClick={handleImport}
+            >
+              {`Importar ${parsedCount || ""} caso${parsedCount === 1 ? "" : "s"}`}
+            </Button>
+          )}
+        </>
+      }
+    >
 
         {!summary && (
           <>
@@ -821,7 +792,7 @@ function ImportCsvModal({
                 if (file) handleFile(file);
               }}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer hover:border-teal-400 hover:bg-teal-50/30"
+              className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center cursor-pointer hover:border-brand-400 hover:bg-brand-50/30"
             >
               <input
                 ref={fileInputRef}
@@ -833,17 +804,18 @@ function ImportCsvModal({
                   if (file) handleFile(file);
                 }}
               />
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                {fileName ? <FileText size={18} aria-hidden /> : <Upload size={18} aria-hidden />}
+              </div>
               <p className="text-sm text-slate-600">
                 {fileName ? (
-                  <>
-                    📄 <span className="font-medium">{fileName}</span>
-                  </>
+                  <span className="font-medium">{fileName}</span>
                 ) : (
                   "Arrastrá un archivo .csv o .xlsx acá o hacé clic para elegirlo"
                 )}
               </p>
               {parsedCount > 0 && (
-                <p className="text-xs text-teal-700 mt-2">
+                <p className="text-xs text-brand-700 mt-2">
                   {parsedCount} caso{parsedCount === 1 ? "" : "s"} listo{parsedCount === 1 ? "" : "s"}{" "}
                   para importar
                 </p>
@@ -872,7 +844,7 @@ function ImportCsvModal({
               <button
                 type="button"
                 onClick={downloadTemplate}
-                className="text-teal-600 hover:underline"
+                className="text-brand-600 hover:underline"
               >
                 Descargar plantilla de ejemplo
               </button>
@@ -882,11 +854,17 @@ function ImportCsvModal({
 
         {summary && (
           <div className="space-y-2">
-            <p className="text-sm text-slate-700">
-              ✅ {summary.created} creado{summary.created === 1 ? "" : "s"} · 🔄 {summary.updated}{" "}
-              actualizado{summary.updated === 1 ? "" : "s"} · ⏭️ {summary.skipped.length} omitido
-              {summary.skipped.length === 1 ? "" : "s"}
-            </p>
+            <div className="flex gap-1.5 flex-wrap">
+              <Badge tone="success">
+                {summary.created} creado{summary.created === 1 ? "" : "s"}
+              </Badge>
+              <Badge tone="info">
+                {summary.updated} actualizado{summary.updated === 1 ? "" : "s"}
+              </Badge>
+              <Badge tone={summary.skipped.length ? "warning" : "neutral"}>
+                {summary.skipped.length} omitido{summary.skipped.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
             {summary.skipped.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 max-h-40 overflow-y-auto">
                 {summary.skipped.map((s, i) => (
@@ -899,26 +877,6 @@ function ImportCsvModal({
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-4 mt-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm text-slate-600 px-4 py-2 hover:text-slate-900"
-          >
-            {summary ? "Cerrar" : "Cancelar"}
-          </button>
-          {!summary && (
-            <button
-              type="button"
-              disabled={parsedCases.length === 0 || loading}
-              onClick={handleImport}
-              className="rounded-lg bg-teal-600 text-white text-sm font-medium px-4 py-2 hover:bg-teal-700 disabled:opacity-50"
-            >
-              {loading ? "Importando..." : `Importar ${parsedCount || ""} caso${parsedCount === 1 ? "" : "s"}`}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
