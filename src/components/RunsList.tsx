@@ -20,8 +20,10 @@ import {
 import {
   Bot,
   CheckCircle2,
+  ExternalLink,
   Eye,
   Folder,
+  GitBranch,
   Hand,
   Loader2,
   MoreHorizontal,
@@ -39,6 +41,8 @@ type Run = {
   name: string;
   status: string;
   source: string;
+  ciUrl: string | null;
+  branch: string | null;
   createdAt: string;
   stats: Record<string, number>;
   total: number;
@@ -247,9 +251,27 @@ export default function RunsList({
                       {r.name}
                     </Link>
                     {r.source === "playwright" ? (
-                      <Badge tone="purple" icon={Bot} className="mt-1">
-                        Playwright
-                      </Badge>
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <Badge tone="purple" icon={Bot}>
+                          Playwright
+                        </Badge>
+                        {r.branch && (
+                          <span className="flex items-center gap-1 text-xs text-slate-500" title="Rama">
+                            <GitBranch size={12} aria-hidden />
+                            <span className="max-w-32 truncate">{r.branch}</span>
+                          </span>
+                        )}
+                        {r.ciUrl && (
+                          <a
+                            href={r.ciUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-0.5 text-xs text-brand-700 hover:underline"
+                          >
+                            CI <ExternalLink size={11} aria-hidden />
+                          </a>
+                        )}
+                      </span>
                     ) : (
                       <Badge icon={Hand} className="mt-1">
                         Manual

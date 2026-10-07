@@ -251,6 +251,11 @@ export const testRuns = pgTable("test_runs", {
   source: text("source", { enum: ["manual", "playwright"] })
     .notNull()
     .default("manual"),
+  // Where an automated run came from, sent by the Playwright reporter: the
+  // CI build page, and the branch/commit that was tested.
+  ciUrl: text("ci_url"),
+  branch: text("branch"),
+  commitSha: text("commit_sha"),
   createdBy: text("created_by").references(() => users.id),
   createdAt: createdAt(),
   completedAt: text("completed_at"),

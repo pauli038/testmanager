@@ -85,6 +85,13 @@
       "when": 1791389338098,
       "tag": "0011_add_requirements",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791402926156,
+      "tag": "0012_add_run_ci_info",
+      "breakpoints": true
     }
   ]
 }

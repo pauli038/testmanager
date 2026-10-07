@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import ConfirmModal from "./ConfirmModal";
 import ReportDefectModal from "./ReportDefectModal";
+import { stripAnsi } from "@/lib/ansi";
 import {
   AutomatedBadge,
   Badge,
@@ -17,7 +18,19 @@ import {
   useToast,
   type RunStatus,
 } from "@/components/ui";
-import { Bug, ChevronRight, ImagePlus, Loader2, ListChecks, X } from "lucide-react";
+import {
+  Bug,
+  ChevronRight,
+  ExternalLink,
+  FileArchive,
+  GitBranch,
+  GitCommitHorizontal,
+  ImagePlus,
+  Loader2,
+  ListChecks,
+  Play,
+  X,
+} from "lucide-react";
 
 const MAX_VIDEO_SECONDS = 200;
 // Above this size, upload in chunks instead of one request — some proxies
@@ -87,7 +100,14 @@ export default function RunExecution({
   projectId: string;
   runId: string;
 }) {
-  const [run, setRun] = useState<{ id: string; name: string; source: string } | null>(null);
+  const [run, setRun] = useState<{
+    id: string;
+    name: string;
+    source: string;
+    ciUrl: string | null;
+    branch: string | null;
+    commitSha: string | null;
+  } | null>(null);
   const [runCases, setRunCases] = useState<RunCase[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -368,6 +388,30 @@ export default function RunExecution({
             de <span className="tabular-nums">{total}</span> ejecutados
           </span>
         </div>
+        {(run?.branch || run?.commitSha || run?.ciUrl) && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500">
+            {run.branch && (
+              <span className="flex items-center gap-1" title="Rama">
+                <GitBranch size={13} aria-hidden /> {run.branch}
+              </span>
+            )}
+            {run.commitSha && (
+              <span className="flex items-center gap-1 font-mono" title={run.commitSha}>
+                <GitCommitHorizontal size={13} aria-hidden /> {run.commitSha.slice(0, 7)}
+              </span>
+            )}
+            {run.ciUrl && (
+              <a
+                href={run.ciUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-brand-700 hover:underline"
+              >
+                <ExternalLink size={13} aria-hidden /> Ver build en CI
+              </a>
+            )}
+          </div>
+        )}
         {total > 0 && (
           <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 mt-3">
             {STATUS_ORDER.map((s) =>
@@ -491,7 +535,7 @@ export default function RunExecution({
                         Error (Playwright)
                       </p>
                       <pre className="text-xs text-red-700 whitespace-pre-wrap font-mono overflow-x-auto">
-                        {c.errorMessage}
+                        {stripAnsi(c.errorMessage)}
                       </pre>
                     </div>
                   )}
@@ -514,22 +558,40 @@ export default function RunExecution({
                     <div className="flex items-center gap-2 flex-wrap">
                       {c.attachments.map((a) => {
                         const isVideo = a.mimeType.startsWith("video/");
+                        const isImage = a.mimeType.startsWith("image/");
+                        const isTrace = !isVideo && !isImage;
                         return (
                           <div key={a.id} className="relative group w-16 h-16 shrink-0">
                             <a
                               href={a.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="block w-full h-full rounded-lg border border-slate-200 overflow-hidden"
+                              download={isTrace ? a.filename : undefined}
+                              title={
+                                isTrace
+                                  ? `${a.filename} · Descárgalo y ábrelo en trace.playwright.dev`
+                                  : a.filename
+                              }
+                              className="relative block w-full h-full rounded-lg border border-slate-200 overflow-hidden"
                             >
                               {isVideo ? (
-                                <video src={a.url} className="w-full h-full object-cover" muted />
-                              ) : (
+                                <>
+                                  <video src={a.url} className="w-full h-full object-cover" muted />
+                                  <span className="absolute inset-0 flex items-center justify-center bg-slate-900/25 text-white">
+                                    <Play size={18} aria-hidden />
+                                  </span>
+                                </>
+                              ) : isImage ? (
                                 <img
                                   src={a.url}
                                   alt={a.filename}
                                   className="w-full h-full object-cover"
                                 />
+                              ) : (
+                                <span className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-slate-50 text-slate-500">
+                                  <FileArchive size={18} aria-hidden />
+                                  <span className="text-[10px] font-medium">Trace</span>
+                                </span>
                               )}
                             </a>
                             <button

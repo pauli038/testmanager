@@ -1,15 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import {
-  apiKeys,
-  testRuns,
-  testRunCases,
-  testSuites,
-  testCases,
-  attachments,
-} from "@/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { testRuns, testRunCases, testSuites, testCases, attachments, projects } from "@/db/schema";
+import { eq, and, inArray, ne } from "drizzle-orm";
 import { extractCodes, caseCodes, mentionsCode, normalizeTitle } from "@/lib/case-matching";
+import { requireApiKey } from "@/lib/api-key";
+
+type Outcome = "passed" | "failed" | "skipped";
+type IngestResult = {
+  automationId: string;
+  title?: string;
+  status: Outcome;
+  durationMs?: number;
+  errorMessage?: string;
+  screenshotBase64?: string;
+};
+
+// When several results of one batch land on the same case (a parametrized
+// test sends one per variant), the case gets a single result: the worst one.
+const SEVERITY: Record<Outcome, number> = { skipped: 0, passed: 1, failed: 2 };
+
+// Only http(s) links are stored, so a CI URL can never become a script link.
+function cleanUrl(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  try {
+    const u = new URL(v.trim());
+    return u.protocol === "http:" || u.protocol === "https:" ? u.toString().slice(0, 500) : null;
+  } catch {
+    return null;
+  }
+}
+const cleanText = (v: unknown, max: number) =>
+  typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
 
 // Playwright integration endpoint.
 // Auth: header "x-api-key: tm_xxx" (create one in Project > Settings > API Keys)
@@ -17,6 +38,11 @@ import { extractCodes, caseCodes, mentionsCode, normalizeTitle } from "@/lib/cas
 // Body shape:
 // {
 //   "runName": "Regression Run #15",          // optional
+//   "ci": {                                    // optional: where the run came from
+//     "url": "https://github.com/org/repo/actions/runs/123",
+//     "branch": "main",
+//     "commit": "a1b2c3d"
+//   },
 //   "results": [
 //     {
 //       "automationId": "LoginTest",           // matches a test case's automationId, or created automatically
@@ -28,26 +54,19 @@ import { extractCodes, caseCodes, mentionsCode, normalizeTitle } from "@/lib/cas
 //     }
 //   ]
 // }
+//
+// Response: { runId, results: [{ automationId, status, runCaseId }], warnings }
+// with results in the same order as the request (variants grouped on one case
+// share their runCaseId). "warnings" flags things that look off, e.g. results
+// that seem to belong to another project (wrong API key). Videos and traces
+// are uploaded afterwards to /api/ingest/attachments with the runCaseId.
 export async function POST(req: NextRequest) {
-  const apiKey = req.headers.get("x-api-key");
-  if (!apiKey) {
-    return NextResponse.json({ error: "Falta el header x-api-key" }, { status: 401 });
-  }
-
-  const keyRecord = await db.query.apiKeys.findFirst({ where: eq(apiKeys.key, apiKey) });
-  if (!keyRecord) {
-    return NextResponse.json({ error: "API key inválida" }, { status: 401 });
-  }
+  const { projectId, error } = await requireApiKey(req);
+  if (error) return error;
+  const keyRecord = { projectId };
 
   const body = await req.json();
-  const results: Array<{
-    automationId: string;
-    title?: string;
-    status: "passed" | "failed" | "skipped";
-    durationMs?: number;
-    errorMessage?: string;
-    screenshotBase64?: string;
-  }> = body.results || [];
+  const results: IngestResult[] = body.results || [];
 
   if (!Array.isArray(results) || results.length === 0) {
     return NextResponse.json({ error: "results vacío" }, { status: 400 });
@@ -79,6 +98,9 @@ export async function POST(req: NextRequest) {
       source: "playwright",
       status: "completed",
       completedAt: new Date().toISOString(),
+      ciUrl: cleanUrl(body.ci?.url),
+      branch: cleanText(body.ci?.branch, 200),
+      commitSha: cleanText(body.ci?.commit, 64),
     })
     .returning();
 
@@ -118,7 +140,9 @@ export async function POST(req: NextRequest) {
     return updated;
   };
 
-  const created = [];
+  // 1) Find (or create) the case each result belongs to.
+  const caseIdByIndex: string[] = [];
+  const createdCases: Case[] = [];
   for (const r of results) {
     const shortTitle = r.title || r.automationId;
 
@@ -186,26 +210,66 @@ export async function POST(req: NextRequest) {
         })
         .returning();
       projectCases.push(testCase);
+      createdCases.push(testCase);
     }
+    caseIdByIndex.push(testCase.id);
+  }
+
+  // 2) One result per case: variants of a parametrized test are grouped.
+  const indexesByCase = new Map<string, number[]>();
+  caseIdByIndex.forEach((caseId, i) =>
+    indexesByCase.set(caseId, [...(indexesByCase.get(caseId) ?? []), i])
+  );
+
+  const variantName = (r: IngestResult) => r.title || r.automationId;
+  const runCaseIdByCase = new Map<string, string>();
+  for (const [caseId, indexes] of indexesByCase) {
+    const group = indexes.map((i) => results[i]);
+    const status = group.reduce<Outcome>(
+      (worst, r) => (SEVERITY[r.status] > SEVERITY[worst] ? r.status : worst),
+      group[0].status
+    );
+    const failed = group.filter((r) => r.status === "failed" && r.errorMessage);
+    const errorMessage =
+      group.length === 1
+        ? group[0].errorMessage || null
+        : failed.map((r) => `▸ ${variantName(r)}\n${r.errorMessage}`).join("\n\n") || null;
+    const count = (o: Outcome) => group.filter((r) => r.status === o).length;
+    const summary = [
+      count("passed") && `${count("passed")} aprobadas`,
+      count("failed") && `${count("failed")} fallidas`,
+      count("skipped") && `${count("skipped")} omitidas`,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const comment =
+      group.length === 1
+        ? "Resultado enviado automáticamente por Playwright"
+        : `Resultado enviado automáticamente por Playwright: ${group.length} variantes (${summary})`;
+    const durations = group
+      .map((r) => r.durationMs)
+      .filter((d): d is number => typeof d === "number");
 
     const [runCase] = await db
       .insert(testRunCases)
       .values({
         runId: run.id,
-        caseId: testCase.id,
-        status: r.status,
+        caseId,
+        status,
         executedAt: new Date().toISOString(),
-        durationMs: r.durationMs || null,
-        errorMessage: r.errorMessage || null,
-        comment: "Resultado enviado automáticamente por Playwright",
+        durationMs: durations.length ? durations.reduce((a, b) => a + b, 0) : null,
+        errorMessage,
+        comment,
       })
       .returning();
+    runCaseIdByCase.set(caseId, runCase.id);
 
-    if (r.screenshotBase64) {
+    for (const r of group) {
+      if (!r.screenshotBase64) continue;
       try {
         await db.insert(attachments).values({
           runCaseId: runCase.id,
-          filename: `${r.automationId}.png`,
+          filename: `${variantName(r).replace(/[^\w.-]+/g, "_").slice(0, 120)}.png`,
           data: r.screenshotBase64,
           mimeType: "image/png",
         });
@@ -213,9 +277,49 @@ export async function POST(req: NextRequest) {
         // ignore attachment errors, don't fail the whole ingest
       }
     }
-
-    created.push({ automationId: r.automationId, status: r.status, runCaseId: runCase.id });
   }
 
-  return NextResponse.json({ runId: run.id, results: created }, { status: 201 });
+  // 3) New cases that look like another project's (same code or automation
+  // id) usually mean the reporter used the wrong project's API key.
+  const warnings: string[] = [];
+  if (createdCases.length) {
+    const others = await db
+      .select({
+        code: testCases.code,
+        automationId: testCases.automationId,
+        projectName: projects.name,
+      })
+      .from(testCases)
+      .innerJoin(testSuites, eq(testCases.suiteId, testSuites.id))
+      .innerJoin(projects, eq(testSuites.projectId, projects.id))
+      .where(ne(testSuites.projectId, keyRecord.projectId));
+    const hits = new Map<string, number>();
+    for (const c of createdCases) {
+      const text = `${c.automationId ?? ""} ${c.title}`;
+      const other = others.find(
+        (o) =>
+          (o.automationId && o.automationId === c.automationId) ||
+          (o.code && mentionsCode(text, o.code))
+      );
+      if (other) hits.set(other.projectName, (hits.get(other.projectName) ?? 0) + 1);
+    }
+    for (const [name, n] of hits) {
+      warnings.push(
+        `${n} caso(s) nuevo(s) coinciden con casos del proyecto "${name}". ¿Usaste la API key correcta?`
+      );
+    }
+  }
+
+  return NextResponse.json(
+    {
+      runId: run.id,
+      results: results.map((r, i) => ({
+        automationId: r.automationId,
+        status: r.status,
+        runCaseId: runCaseIdByCase.get(caseIdByIndex[i])!,
+      })),
+      warnings,
+    },
+    { status: 201 }
+  );
 }
