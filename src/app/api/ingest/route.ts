@@ -9,7 +9,7 @@ import {
   attachments,
 } from "@/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { extractCodes, caseCodes, normalizeTitle } from "@/lib/case-matching";
+import { extractCodes, caseCodes, mentionsCode, normalizeTitle } from "@/lib/case-matching";
 
 // Playwright integration endpoint.
 // Auth: header "x-api-key: tm_xxx" (create one in Project > Settings > API Keys)
@@ -130,10 +130,24 @@ export async function POST(req: NextRequest) {
       (c) => c.automated && (c.automationId === r.automationId || c.automationId === shortTitle)
     );
 
-    // 2) Match by test code: "TC-RF020-06 …" or "… (RN-044)" in the test's
-    // title/titlePath links to the case that has that code in its tags,
-    // automationId or title. TC codes identify a single case, so they're
-    // tried before RN (business rule) codes.
+    // 2) Match by the case's code field: a test whose title/titlePath mentions
+    // "TC-RF020-06" (or whatever code the case has) feeds that case. When
+    // several codes are mentioned, the longest one wins, so "TC-RF020-06"
+    // beats a hypothetical "TC-RF020".
+    if (!testCase) {
+      const text = `${r.automationId} ${shortTitle}`;
+      const byCode = projectCases
+        .filter((c) => c.code && mentionsCode(text, c.code))
+        .sort((a, b) => b.code!.length - a.code!.length);
+      const longest = byCode.filter((c) => c.code!.length === byCode[0]?.code!.length);
+      const match = pickOne(longest);
+      if (match) testCase = await linkCase(match, r.automationId);
+    }
+
+    // 3) Match by codes in tags/automationId/title: "TC-RF020-06 …" or
+    // "… (RN-044)" in the test links to the case that has that code there.
+    // TC codes identify a single case, so they're tried before RN (business
+    // rule) codes.
     if (!testCase) {
       const codes = extractCodes(`${r.automationId} ${shortTitle}`);
       for (const tier of [codes.filter((c) => c.startsWith("TC-")), codes]) {
@@ -146,7 +160,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3) No case has that automationId or code yet — but if there's already a
+    // 4) No case has that automationId or code yet — but if there's already a
     // case with the same title (ignoring case, accents, punctuation and test
     // codes) sitting in its real suite (created by hand, automationId never
     // filled in), reuse it instead of creating a duplicate in "Automatizado

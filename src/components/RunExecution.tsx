@@ -7,11 +7,14 @@ import {
   AutomatedBadge,
   Badge,
   Button,
+  CodeBadge,
   EmptyState,
   StatusBadge,
   STATUS_META,
   Textarea,
   cn,
+  errorMessage,
+  useToast,
   type RunStatus,
 } from "@/components/ui";
 import { Bug, ChevronRight, ImagePlus, Loader2, ListChecks, X } from "lucide-react";
@@ -55,6 +58,7 @@ type RunCase = {
   errorMessage: string | null;
   executedByName: string | null;
   caseId: string;
+  caseCode: string | null;
   caseTitle: string;
   caseSteps: string;
   casePreconditions: string | null;
@@ -100,6 +104,7 @@ export default function RunExecution({
     caseTitle: string;
   } | null>(null);
   const [reportingDefect, setReportingDefect] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -139,33 +144,48 @@ export default function RunExecution({
   async function setStatus(runCaseId: string, status: RunCase["status"]) {
     // Preserve a previously set/edited execution date instead of always
     // restamping "now" — only defaults to now the first time a case is executed.
-    const executedAt = runCases.find((c) => c.id === runCaseId)?.executedAt ?? new Date().toISOString();
+    const previous = runCases.find((c) => c.id === runCaseId);
+    const executedAt = previous?.executedAt ?? new Date().toISOString();
     setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, status, executedAt } : c)));
-    await fetch(`/api/run-cases/${runCaseId}`, {
+    const res = await fetch(`/api/run-cases/${runCaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status, executedAt }),
-    });
+    }).catch(() => null);
+    // No toast on success: results are marked one after another and the
+    // button already shows the new status. Only a failure needs attention.
+    if (!res?.ok) {
+      if (previous) setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? previous : c)));
+      toast.error("No se guardó el resultado", "Revisa tu conexión e intenta de nuevo.");
+    }
   }
 
   async function saveComment(runCaseId: string, comment: string) {
     const current = runCases.find((c) => c.id === runCaseId);
-    await fetch(`/api/run-cases/${runCaseId}`, {
+    if ((current?.comment || "") === comment) return;
+    const res = await fetch(`/api/run-cases/${runCaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: current?.status, comment, executedAt: current?.executedAt ?? null }),
-    });
+    }).catch(() => null);
+    if (res?.ok) {
+      setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, comment } : c)));
+      toast.success("Comentario guardado");
+    } else {
+      toast.error("No se guardó el comentario", "Tu texto sigue en el campo; intenta de nuevo.");
+    }
   }
 
   async function saveExecutedAt(runCaseId: string, dateStr: string) {
     const executedAt = dateStr ? new Date(`${dateStr}T12:00:00`).toISOString() : null;
     setRunCases((rc) => rc.map((c) => (c.id === runCaseId ? { ...c, executedAt } : c)));
     const current = runCases.find((c) => c.id === runCaseId);
-    await fetch(`/api/run-cases/${runCaseId}`, {
+    const res = await fetch(`/api/run-cases/${runCaseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: current?.status, executedAt }),
-    });
+    }).catch(() => null);
+    if (!res?.ok) toast.error("No se guardó la fecha de ejecución");
   }
 
   // Shared by both upload paths: reads a fetch Response, and on failure
@@ -230,6 +250,7 @@ export default function RunExecution({
           c.id === runCaseId ? { ...c, attachments: [...c.attachments, attachment!] } : c
         )
       );
+      toast.success("Evidencia subida", file.name);
     }
   }
 
@@ -275,7 +296,13 @@ export default function RunExecution({
   }
 
   async function removeAttachment(runCaseId: string, attachmentId: string) {
-    await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
+    setPendingDeleteAttachment(null);
+    const res = await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar la evidencia"));
+      return;
+    }
+    toast.success("Evidencia eliminada");
     setRunCases((rc) =>
       rc.map((c) =>
         c.id === runCaseId
@@ -283,7 +310,6 @@ export default function RunExecution({
           : c
       )
     );
-    setPendingDeleteAttachment(null);
   }
 
   async function createDefect(title: string, severity: string) {
@@ -304,6 +330,9 @@ export default function RunExecution({
           )
         );
         setPendingDefect(null);
+        toast.success("Defecto reportado", defect.title);
+      } else {
+        toast.error(await errorMessage(res, "No se pudo reportar el defecto"));
       }
     } finally {
       setReportingDefect(false);
@@ -395,6 +424,7 @@ export default function RunExecution({
                     className={cn("shrink-0 text-slate-400 transition-transform", isOpen && "rotate-90")}
                   />
                   <StatusBadge status={c.status as RunStatus} className="shrink-0" />
+                  <CodeBadge code={c.caseCode} className="shrink-0" />
                   <span className="text-sm font-medium text-slate-900 truncate">{c.caseTitle}</span>
                   {c.caseAutomated && <AutomatedBadge label="Auto" className="shrink-0" />}
                 </div>

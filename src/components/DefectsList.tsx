@@ -5,6 +5,7 @@ import ConfirmModal from "./ConfirmModal";
 import {
   Badge,
   Button,
+  CodeBadge,
   EmptyState,
   IconButton,
   Input,
@@ -15,6 +16,8 @@ import {
   Textarea,
   buttonClasses,
   cn,
+  errorMessage,
+  useToast,
 } from "@/components/ui";
 import {
   Bug,
@@ -31,7 +34,7 @@ import {
   X,
 } from "lucide-react";
 
-type CaseRef = { id: string; title: string };
+type CaseRef = { id: string; code: string | null; title: string };
 type RetestEntry = { id: string; date: string; result: string; comment: string };
 type Attachment = { id: string; filename: string; url: string; retestId: string | null };
 type Defect = {
@@ -142,6 +145,8 @@ export default function DefectsList({
   const [reportDefectIds, setReportDefectIds] = useState<string[]>([]);
   const [reportPickerOpen, setReportPickerOpen] = useState(false);
   const reportPickerRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   // Close the report picker when clicking outside it.
   useEffect(() => {
@@ -232,6 +237,7 @@ export default function DefectsList({
       detectedAt: detectedAt || null,
       retests: retests.filter((r) => r.date || r.comment.trim()),
     };
+    setSaving(true);
     const res = editingDefect
       ? await fetch(`/api/defects/${editingDefect.id}`, {
           method: "PATCH",
@@ -243,33 +249,49 @@ export default function DefectsList({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-    if (res.ok) {
-      const saved = await res.json();
-      if (editingDefect) {
-        setDefects((d) => d.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)));
-        if (viewingDefect?.id === saved.id) setViewingDefect((v) => (v ? { ...v, ...saved } : v));
-      } else {
-        setDefects((d) => [saved, ...d]);
-      }
-      setOpen(false);
-      setEditingDefect(null);
+    setSaving(false);
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo guardar el defecto"));
+      return;
     }
+    const saved = await res.json();
+    if (editingDefect) {
+      setDefects((d) => d.map((x) => (x.id === saved.id ? { ...x, ...saved } : x)));
+      if (viewingDefect?.id === saved.id) setViewingDefect((v) => (v ? { ...v, ...saved } : v));
+    } else {
+      setDefects((d) => [saved, ...d]);
+    }
+    setOpen(false);
+    setEditingDefect(null);
+    toast.success(editingDefect ? "Defecto actualizado" : "Defecto creado", saved.title);
   }
 
   async function updateStatus(id: string, status: string) {
+    const previous = defects.find((x) => x.id === id)?.status;
     setDefects((d) => d.map((x) => (x.id === id ? { ...x, status } : x)));
-    await fetch(`/api/defects/${id}`, {
+    const res = await fetch(`/api/defects/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
-    });
+    }).catch(() => null);
+    if (res?.ok) {
+      toast.success(`Defecto ${statusLabels[status]?.toLowerCase() ?? "actualizado"}`);
+    } else {
+      if (previous) setDefects((d) => d.map((x) => (x.id === id ? { ...x, status: previous } : x)));
+      toast.error("No se pudo cambiar el estado del defecto");
+    }
   }
 
   async function remove(id: string) {
-    await fetch(`/api/defects/${id}`, { method: "DELETE" });
+    setPendingDelete(null);
+    const res = await fetch(`/api/defects/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar el defecto"));
+      return;
+    }
     setDefects((d) => d.filter((x) => x.id !== id));
     setReportDefectIds((ids) => ids.filter((x) => x !== id));
-    setPendingDelete(null);
+    toast.success("Defecto eliminado");
   }
 
   async function uploadEvidence(defectId: string, file: File, retestId?: string) {
@@ -280,23 +302,30 @@ export default function DefectsList({
       method: "POST",
       body: fd,
     });
-    if (res.ok) {
-      const attachment: Attachment = await res.json();
-      setDefects((d) =>
-        d.map((x) =>
-          x.id === defectId ? { ...x, attachments: [...x.attachments, attachment] } : x
-        )
-      );
-      setViewingDefect((v) =>
-        v && v.id === defectId ? { ...v, attachments: [...v.attachments, attachment] } : v
-      );
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo subir la evidencia"), file.name);
+      return;
     }
+    const attachment: Attachment = await res.json();
+    toast.success("Evidencia subida", file.name);
+    setDefects((d) =>
+      d.map((x) =>
+        x.id === defectId ? { ...x, attachments: [...x.attachments, attachment] } : x
+      )
+    );
+    setViewingDefect((v) =>
+      v && v.id === defectId ? { ...v, attachments: [...v.attachments, attachment] } : v
+    );
   }
 
   async function removeAttachment(defectId: string, attachmentId: string) {
     setPendingAttachmentDelete(null);
     const res = await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
-    if (!res.ok) return;
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar la evidencia"));
+      return;
+    }
+    toast.success("Evidencia eliminada");
     const strip = (x: Defect) =>
       x.id === defectId
         ? { ...x, attachments: x.attachments.filter((a) => a.id !== attachmentId) }
@@ -341,7 +370,10 @@ export default function DefectsList({
         : "";
       const url = `${base}?format=${format}${filterParam}`;
       const res = await fetch(url);
-      if (!res.ok) return;
+      if (!res.ok) {
+        toast.error("No se pudo generar el reporte de defectos");
+        return;
+      }
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") || "";
       const match = disposition.match(/filename="(.+?)"/);
@@ -480,8 +512,8 @@ export default function DefectsList({
                   <PriorityBadge priority={d.severity} />
                   {d.module && <Badge icon={Layers}>{d.module}</Badge>}
                   {d.cases.map((c) => (
-                    <Badge key={c.id} icon={Link2} className="max-w-full truncate">
-                      {c.title}
+                    <Badge key={c.id} icon={Link2} className="max-w-full truncate" title={c.title}>
+                      {c.code ?? c.title}
                     </Badge>
                   ))}
                 </div>
@@ -670,6 +702,7 @@ export default function DefectsList({
                           onChange={() => toggleCase(c.id)}
                           className="rounded border-slate-300 shrink-0"
                         />
+                        <CodeBadge code={c.code} />
                         <span className="truncate" title={c.title}>
                           {c.title}
                         </span>
@@ -739,7 +772,7 @@ export default function DefectsList({
                 >
                   Cancelar
                 </Button>
-                <Button type="submit">
+                <Button type="submit" loading={saving}>
                   {editingDefect ? "Guardar" : "Crear"}
                 </Button>
               </div>
@@ -851,7 +884,7 @@ export default function DefectsList({
                 <div className="flex flex-wrap gap-1.5">
                   {viewingDefect.cases.map((c) => (
                     <Badge key={c.id} icon={Link2}>
-                      {c.title}
+                      {c.code ? `${c.code} · ${c.title}` : c.title}
                     </Badge>
                   ))}
                 </div>

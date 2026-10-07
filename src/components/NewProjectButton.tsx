@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Input, Label, Modal, Textarea } from "@/components/ui";
+import { Button, Input, Label, Modal, Textarea, useToast } from "@/components/ui";
 import { Plus } from "lucide-react";
 
 export default function NewProjectButton() {
@@ -12,6 +12,7 @@ export default function NewProjectButton() {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -36,6 +37,7 @@ export default function NewProjectButton() {
       setOpen(false);
       setName("");
       setDescription("");
+      toast.success("Proyecto creado", project.name);
       router.push(`/projects/${project.id}`);
     } catch {
       setError("No se pudo conectar con el servidor. Intenta de nuevo.");

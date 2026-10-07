@@ -3,10 +3,14 @@ import { db } from "@/db";
 import { testCases, testSuites } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
 import { normalizePriority, normalizeType, type ImportedCaseRow } from "@/lib/csv";
+import { codeFormatError, normalizeCode } from "@/lib/case-code";
 import { eq, and, inArray, isNotNull } from "drizzle-orm";
 
 // Bulk import of test cases into a suite, e.g. from a CSV file.
 // Reuses cases instead of duplicating them:
+//  - a row whose code already belongs to a case in this suite updates that case
+//  - a row whose code belongs to a case in another suite of the project is
+//    skipped (codes are unique per project)
 //  - a row whose title already matches a case in this suite updates it in place
 //  - a row whose automationId already belongs to an automated case in another
 //    suite of the same project is skipped (that's the case the Playwright
@@ -36,6 +40,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const suiteCases = await db.query.testCases.findMany({ where: eq(testCases.suiteId, suiteId) });
   const byTitle = new Map(suiteCases.map((c) => [c.title.trim().toLowerCase(), c]));
 
+  const casesElsewhere = await db.query.testCases.findMany({
+    where: inArray(testCases.suiteId, projectSuiteIds.filter((s) => s !== suiteId)),
+    columns: { code: true, title: true },
+  });
+  const codeElsewhere = new Map(
+    casesElsewhere.filter((c) => c.code).map((c) => [c.code!.toUpperCase(), c.title])
+  );
+  const byCode = new Map(
+    suiteCases.filter((c) => c.code).map((c) => [c.code!.toUpperCase(), c])
+  );
+
   const automatedElsewhere = await db.query.testCases.findMany({
     where: and(
       inArray(testCases.suiteId, projectSuiteIds.filter((s) => s !== suiteId)),
@@ -59,6 +74,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       continue;
     }
 
+    const code = normalizeCode(row.code);
+    if (code) {
+      const formatError = codeFormatError(code);
+      if (formatError) {
+        summary.skipped.push({ title, reason: formatError });
+        continue;
+      }
+      if (codeElsewhere.has(code)) {
+        summary.skipped.push({
+          title,
+          reason: `El código ${code} ya lo usa "${codeElsewhere.get(code)}" en otra suite de este proyecto`,
+        });
+        continue;
+      }
+    }
+
     const automationId = row.automationId?.trim() || null;
     if (automationId && automationIdElsewhere.has(automationId)) {
       summary.skipped.push({
@@ -69,6 +100,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     const payload = {
+      ...(code ? { code } : {}),
       title,
       preconditions: row.preconditions?.trim() || null,
       steps: JSON.stringify(row.steps || []),
@@ -80,10 +112,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     };
 
     const key = title.toLowerCase();
-    const existing = byTitle.get(key);
+    const existing = (code && byCode.get(code)) || byTitle.get(key);
     if (existing) {
+      if (code && byCode.has(code) && byCode.get(code)!.id !== existing.id) {
+        summary.skipped.push({ title, reason: `El código ${code} ya lo usa otro caso de esta suite` });
+        continue;
+      }
       await db.update(testCases).set(payload).where(eq(testCases.id, existing.id));
+      if (code) byCode.set(code, { ...existing, code });
       summary.updated++;
+      continue;
+    }
+    if (code && byCode.has(code)) {
+      summary.skipped.push({ title, reason: `El código ${code} ya lo usa otro caso de esta suite` });
       continue;
     }
 
@@ -92,6 +133,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       .values({ suiteId, ...payload, createdBy: user!.id })
       .returning();
     byTitle.set(key, created);
+    if (code) byCode.set(code, created);
     summary.created++;
   }
 

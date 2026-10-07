@@ -9,7 +9,9 @@ import {
   AutomatedBadge,
   Badge,
   Button,
+  CodeBadge,
   EmptyState,
+  Field,
   IconButton,
   Input,
   Label,
@@ -18,6 +20,8 @@ import {
   Select,
   StatusBadge,
   Textarea,
+  errorMessage,
+  useToast,
   type RunStatus,
 } from "@/components/ui";
 import { Eye, FileText, Folder, FolderOpen, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
@@ -35,6 +39,7 @@ type TestCase = {
   tags: string;
   automated: boolean;
   automationId: string | null;
+  code: string | null;
   lastStatus?: string | null;
 };
 
@@ -67,6 +72,7 @@ export default function SuitesExplorer({
   const [pendingDeleteCase, setPendingDeleteCase] = useState<{ caseId: string; suiteId: string } | null>(
     null
   );
+  const toast = useToast();
 
   async function createSuite(e: React.FormEvent) {
     e.preventDefault();
@@ -76,20 +82,28 @@ export default function SuitesExplorer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newSuiteName }),
     });
-    if (res.ok) {
-      const suite = await res.json();
-      setSuites((s) => [...s, suite]);
-      setCasesBySuite((c) => ({ ...c, [suite.id]: [] }));
-      setSelectedSuite(suite.id);
-      setNewSuiteName("");
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo crear la suite"));
+      return;
     }
+    const suite = await res.json();
+    setSuites((s) => [...s, suite]);
+    setCasesBySuite((c) => ({ ...c, [suite.id]: [] }));
+    setSelectedSuite(suite.id);
+    setNewSuiteName("");
+    toast.success(`Suite "${suite.name}" creada`);
   }
 
   async function deleteSuite(suiteId: string) {
-    await fetch(`/api/suites/${suiteId}`, { method: "DELETE" });
+    setPendingDeleteSuite(null);
+    const res = await fetch(`/api/suites/${suiteId}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar la suite"));
+      return;
+    }
     setSuites((s) => s.filter((x) => x.id !== suiteId));
     if (selectedSuite === suiteId) setSelectedSuite(null);
-    setPendingDeleteSuite(null);
+    toast.success("Suite eliminada");
     router.refresh();
   }
 
@@ -108,12 +122,17 @@ export default function SuitesExplorer({
   }
 
   async function deleteCase(caseId: string, suiteId: string) {
-    await fetch(`/api/cases/${caseId}`, { method: "DELETE" });
+    setPendingDeleteCase(null);
+    const res = await fetch(`/api/cases/${caseId}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar el caso"));
+      return;
+    }
     setCasesBySuite((c) => ({
       ...c,
       [suiteId]: c[suiteId].filter((x) => x.id !== caseId),
     }));
-    setPendingDeleteCase(null);
+    toast.success("Caso eliminado");
   }
 
   async function reloadCases(suiteId: string) {
@@ -135,6 +154,7 @@ export default function SuitesExplorer({
       };
     });
     setShowCaseModal(false);
+    toast.success(isNew ? "Caso creado" : "Caso actualizado", testCase.code ?? testCase.title);
   }
 
   const currentCases = selectedSuite ? casesBySuite[selectedSuite] || [] : [];
@@ -243,6 +263,7 @@ export default function SuitesExplorer({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <CodeBadge code={c.code} />
                         <button
                           onClick={() => openViewCase(c)}
                           className="font-medium text-slate-900 text-sm text-left hover:text-brand-700"
@@ -375,7 +396,12 @@ function ViewCaseModal({
     <Modal
       onClose={onClose}
       size="lg"
-      title={testCase.title}
+      title={
+        <span className="flex items-start gap-2">
+          <CodeBadge code={testCase.code} className="mt-0.5" />
+          <span>{testCase.title}</span>
+        </span>
+      }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
@@ -473,7 +499,10 @@ function CaseModal({
   const [steps, setSteps] = useState<Step[]>(
     existing?.steps ? JSON.parse(existing.steps) : [{ step: "", expected: "" }]
   );
+  const [code, setCode] = useState(existing?.code || "");
   const [loading, setLoading] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const toast = useToast();
 
   function updateStep(idx: number, field: keyof Step, value: string) {
     setSteps((s) => s.map((st, i) => (i === idx ? { ...st, [field]: value } : st)));
@@ -490,7 +519,9 @@ function CaseModal({
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setCodeError("");
     const payload = {
+      code,
       title,
       preconditions,
       priority,
@@ -515,7 +546,12 @@ function CaseModal({
     if (res.ok) {
       const c = await res.json();
       onSaved(suiteId, c, !existing);
+      return;
     }
+    const message = await errorMessage(res, "No se pudo guardar el caso");
+    // Code problems (format or already in use) are shown next to the field.
+    if (/c[oó]digo/i.test(message)) setCodeError(message);
+    else toast.error(message);
   }
 
   return (
@@ -525,13 +561,33 @@ function CaseModal({
       title={existing ? "Editar caso de prueba" : "Nuevo caso de prueba"}
     >
         <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <Label>Título</Label>
-            <Input
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-3">
+            <Field
+              label="Código"
+              htmlFor="case-code"
+              error={codeError}
+              hint={codeError ? undefined : "Ej. TC-RF020-06"}
+            >
+              <Input
+                id="case-code"
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.toUpperCase());
+                  setCodeError("");
+                }}
+                placeholder="Opcional"
+                className="font-mono"
+                aria-invalid={!!codeError}
+              />
+            </Field>
+            <Field label="Título" htmlFor="case-title">
+              <Input
+                id="case-title"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </Field>
           </div>
           <div>
             <Label>

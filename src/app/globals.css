@@ -25,3 +25,10 @@ input[type="checkbox"],
 input[type="radio"] {
   accent-color: var(--color-brand-600);
 }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}

@@ -18,6 +18,7 @@ type TestCase = {
   tags: string;
   automated: boolean;
   automationId: string | null;
+  code: string | null;
   lastStatus?: string | null;
 };
 

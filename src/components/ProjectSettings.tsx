@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "./ConfirmModal";
-import { Button } from "@/components/ui";
+import { Button, useToast } from "@/components/ui";
 import { Trash2 } from "lucide-react";
 
 // Delete the project (admin only). `children` is rendered first so the danger zone stays last.
@@ -20,6 +20,7 @@ export default function ProjectSettings({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const toast = useToast();
 
   async function remove() {
     setConfirmOpen(false);
@@ -33,6 +34,7 @@ export default function ProjectSettings({
         setDeleting(false);
         return;
       }
+      toast.success(`Proyecto "${project.name}" eliminado`);
       router.push("/");
       router.refresh();
     } catch {

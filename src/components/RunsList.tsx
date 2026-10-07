@@ -4,7 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ConfirmModal from "./ConfirmModal";
-import { Badge, Button, EmptyState, IconButton, Input, Label, Modal, Segmented } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  CodeBadge,
+  EmptyState,
+  IconButton,
+  Input,
+  Label,
+  Modal,
+  Segmented,
+  errorMessage,
+  useToast,
+} from "@/components/ui";
 import {
   Bot,
   CheckCircle2,
@@ -21,7 +33,7 @@ import {
 } from "lucide-react";
 
 type Suite = { id: string; name: string };
-type CaseRef = { id: string; title: string };
+type CaseRef = { id: string; code: string | null; title: string };
 type Run = {
   id: string;
   name: string;
@@ -60,6 +72,8 @@ export default function RunsList({
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [creating, setCreating] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     fetch(`/api/projects/${projectId}/runs`)
@@ -87,15 +101,23 @@ export default function RunsList({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    if (res.ok) {
-      setRuns((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)));
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo cambiar el estado del run"));
+      return;
     }
+    setRuns((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)));
+    toast.success(status === "completed" ? "Run marcado como completado" : "Run reactivado");
   }
 
   async function removeRun(id: string) {
-    await fetch(`/api/runs/${id}`, { method: "DELETE" });
-    setRuns((rs) => rs.filter((r) => r.id !== id));
     setPendingDelete(null);
+    const res = await fetch(`/api/runs/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar el run"));
+      return;
+    }
+    setRuns((rs) => rs.filter((r) => r.id !== id));
+    toast.success("Run eliminado");
   }
 
   function toggleCase(id: string) {
@@ -118,14 +140,19 @@ export default function RunsList({
 
   async function createRun(e: React.FormEvent) {
     e.preventDefault();
+    setCreating(true);
     const res = await fetch(`/api/projects/${projectId}/runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, caseIds: Array.from(selected) }),
     });
-    if (res.ok) {
-      router.push(`/projects/${projectId}/runs/${(await res.json()).id}`);
+    if (!res.ok) {
+      setCreating(false);
+      toast.error(await errorMessage(res, "No se pudo crear el run"));
+      return;
     }
+    toast.success(`Run "${name}" creado`, `${selected.size} caso${selected.size === 1 ? "" : "s"}`);
+    router.push(`/projects/${projectId}/runs/${(await res.json()).id}`);
   }
 
   function toLocalDateStr(iso: string) {
@@ -349,6 +376,7 @@ export default function RunsList({
                               checked={selected.has(c.id)}
                               onChange={() => toggleCase(c.id)}
                             />
+                            <CodeBadge code={c.code} />
                             {c.title}
                           </label>
                         ))}
@@ -368,6 +396,7 @@ export default function RunsList({
                 <Button
                   type="submit"
                   disabled={selected.size === 0}
+                  loading={creating}
                 >
                   Crear run
                 </Button>

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { testSuites, testCases, testRunCases, caseKanbanColumns } from "@/db/schema";
-import { eq, and, ne, inArray, desc, asc } from "drizzle-orm";
+import { eq, and, ne, inArray, desc, asc, sql } from "drizzle-orm";
 import CasesView from "@/components/CasesView";
 
 type CaseRow = typeof testCases.$inferSelect;
@@ -22,12 +22,17 @@ export default async function SuitesPage(props: {
     where: eq(testSuites.projectId, id),
   });
 
-  const casesBySuite: Record<string, CaseRow[]> = {};
-  for (const suite of suites) {
-    casesBySuite[suite.id] = await db.query.testCases.findMany({
-      where: eq(testCases.suiteId, suite.id),
-    });
-  }
+  // One query for every suite's cases, ordered by code (cases without one go
+  // last, by title).
+  const casesBySuite: Record<string, CaseRow[]> = Object.fromEntries(suites.map((s) => [s.id, []]));
+  const allCases = suites.length
+    ? await db
+        .select()
+        .from(testCases)
+        .where(inArray(testCases.suiteId, suites.map((s) => s.id)))
+        .orderBy(sql`${testCases.code} asc nulls last`, asc(testCases.title))
+    : [];
+  for (const c of allCases) casesBySuite[c.suiteId].push(c);
 
   const allCaseIds = Object.values(casesBySuite)
     .flat()
@@ -69,6 +74,7 @@ export default async function SuitesPage(props: {
     .flat()
     .map((c) => ({
       id: c.id,
+      code: c.code,
       title: c.title,
       suiteId: c.suiteId,
       suiteName: suiteNameById[c.suiteId] || "",

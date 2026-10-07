@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { testCases } from "@/db/schema";
+import { testCases, testSuites } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
+import { validateCode } from "@/lib/case-code";
 import { eq } from "drizzle-orm";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -19,9 +20,22 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   const body = await req.json();
 
+  // Only validate the code when it's being changed — the Kanban sends PATCHes
+  // with just { phase }.
+  let code: string | null | undefined;
+  if (body.code !== undefined) {
+    const existing = await db.query.testCases.findFirst({ where: eq(testCases.id, id) });
+    if (!existing) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    const suite = await db.query.testSuites.findFirst({ where: eq(testSuites.id, existing.suiteId) });
+    const result = await validateCode(body.code, suite!.projectId, id);
+    if (result.error) return NextResponse.json({ error: result.error }, { status: result.status });
+    code = result.code;
+  }
+
   const [updated] = await db
     .update(testCases)
     .set({
+      code,
       title: body.title,
       preconditions: body.preconditions,
       steps: body.steps !== undefined ? JSON.stringify(body.steps) : undefined,

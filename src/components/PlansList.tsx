@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import ConfirmModal from "./ConfirmModal";
-import { Badge, Button, EmptyState, IconButton, Input, Label, Modal, Textarea } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  EmptyState,
+  IconButton,
+  Input,
+  Label,
+  Modal,
+  Textarea,
+  errorMessage,
+  useToast,
+} from "@/components/ui";
 import { ClipboardList, Folder, Pencil, Plus, Trash2 } from "lucide-react";
 
 type Suite = { id: string; name: string };
@@ -30,6 +41,7 @@ export default function PlansList({
   const [open, setOpen] = useState(false);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const toast = useToast();
 
   function openNew() {
     setEditingPlan(null);
@@ -64,25 +76,33 @@ export default function PlansList({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, description, suiteIds }),
         });
-    if (res.ok) {
-      const saved = await res.json();
-      if (editingPlan) {
-        setPlans((p) => p.map((x) => (x.id === saved.id ? saved : x)));
-      } else {
-        setPlans((p) => [saved, ...p]);
-      }
-      setName("");
-      setDescription("");
-      setSuiteIds([]);
-      setEditingPlan(null);
-      setOpen(false);
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo guardar el plan"));
+      return;
     }
+    const saved = await res.json();
+    toast.success(editingPlan ? "Plan actualizado" : "Plan creado", saved.name);
+    if (editingPlan) {
+      setPlans((p) => p.map((x) => (x.id === saved.id ? saved : x)));
+    } else {
+      setPlans((p) => [saved, ...p]);
+    }
+    setName("");
+    setDescription("");
+    setSuiteIds([]);
+    setEditingPlan(null);
+    setOpen(false);
   }
 
   async function remove(id: string) {
-    await fetch(`/api/plans/${id}`, { method: "DELETE" });
-    setPlans((p) => p.filter((x) => x.id !== id));
     setPendingDelete(null);
+    const res = await fetch(`/api/plans/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar el plan"));
+      return;
+    }
+    setPlans((p) => p.filter((x) => x.id !== id));
+    toast.success("Plan eliminado");
   }
 
   return (

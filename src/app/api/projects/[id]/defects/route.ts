@@ -16,7 +16,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       // images would otherwise blow past Vercel's response-size limit.
       // The actual bytes are served on demand via /api/attachments/[id].
       attachments: { columns: { id: true, filename: true, retestId: true } },
-      testCases: { with: { case: { columns: { id: true, title: true } } } },
+      testCases: { with: { case: { columns: { id: true, code: true, title: true } } } },
     },
   });
   const result = all.map((d) => ({
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     await db.insert(defectTestCases).values(caseIds.map((caseId) => ({ defectId: defect.id, caseId })));
     const linked = await db.query.defectTestCases.findMany({
       where: eq(defectTestCases.defectId, defect.id),
-      with: { case: { columns: { id: true, title: true } } },
+      with: { case: { columns: { id: true, code: true, title: true } } },
     });
     cases = linked.map((l) => l.case);
   }

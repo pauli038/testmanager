@@ -7,6 +7,7 @@ import {
   AutomatedBadge,
   Badge,
   Button,
+  CodeBadge,
   EmptyState,
   IconButton,
   Input,
@@ -14,6 +15,7 @@ import {
   PriorityBadge,
   Select,
   STATUS_META,
+  useToast,
   type RunStatus,
 } from "@/components/ui";
 import { ChevronDown, ChevronUp, Columns3, Folder, Plus, Settings2, Trash2, X } from "lucide-react";
@@ -29,6 +31,7 @@ export type KanbanColumn = {
 
 export type KanbanCase = {
   id: string;
+  code: string | null;
   title: string;
   suiteId: string;
   suiteName: string;
@@ -123,6 +126,7 @@ export default function CaseKanbanBoard({
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedToAdd, setSelectedToAdd] = useState<Set<string>>(new Set());
   const [addTargetColumn, setAddTargetColumn] = useState("");
+  const toast = useToast();
 
   const suiteOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -161,15 +165,18 @@ export default function CaseKanbanBoard({
     const ids = [...selectedToAdd];
     setCases((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, phase: targetColumn } : c)));
     setAddModalOpen(false);
-    await Promise.all(
+    const results = await Promise.all(
       ids.map((id) =>
         fetch(`/api/cases/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ phase: targetColumn }),
-        })
+        }).then((r) => r.ok, () => false)
       )
     );
+    const failed = results.filter((ok) => !ok).length;
+    if (failed) toast.error(`No se pudieron agregar ${failed} caso(s) al tablero`);
+    else toast.success(`${ids.length} caso${ids.length === 1 ? "" : "s"} agregado${ids.length === 1 ? "" : "s"} al tablero`);
   }
 
   async function removeFromBoard(caseId: string) {
@@ -182,12 +189,19 @@ export default function CaseKanbanBoard({
   }
 
   async function moveCase(caseId: string, phase: string) {
+    const previous = cases.find((c) => c.id === caseId)?.phase ?? null;
+    if (previous === phase) return;
     setCases((prev) => prev.map((c) => (c.id === caseId ? { ...c, phase } : c)));
-    await fetch(`/api/cases/${caseId}`, {
+    const res = await fetch(`/api/cases/${caseId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ phase }),
-    });
+    }).catch(() => null);
+    if (!res?.ok) {
+      // Put the card back where it was so the board matches the server.
+      setCases((prev) => prev.map((c) => (c.id === caseId ? { ...c, phase: previous } : c)));
+      toast.error("No se pudo mover el caso", "Revisa tu conexión e intenta de nuevo.");
+    }
   }
 
   function handleDrop(columnKey: string) {
@@ -204,12 +218,15 @@ export default function CaseKanbanBoard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label: newColumnLabel, color: newColumnColor }),
     });
-    if (res.ok) {
-      const column = await res.json();
-      setColumns((prev) => [...prev, column]);
-      setNewColumnLabel("");
-      setNewColumnColor("slate");
+    if (!res.ok) {
+      toast.error("No se pudo crear la fase");
+      return;
     }
+    const column = await res.json();
+    setColumns((prev) => [...prev, column]);
+    setNewColumnLabel("");
+    setNewColumnColor("slate");
+    toast.success(`Fase "${column.label}" creada`);
   }
 
   async function renameColumn(id: string, label: string) {
@@ -258,7 +275,9 @@ export default function CaseKanbanBoard({
       prev.map((c) => (c.phase === column.key ? { ...c, phase: fallbackKey } : c))
     );
     setPendingDeleteColumn(null);
-    await fetch(`/api/kanban-columns/${column.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/kanban-columns/${column.id}`, { method: "DELETE" });
+    if (res.ok) toast.success(`Fase "${column.label}" eliminada`);
+    else toast.error("No se pudo eliminar la fase", "Recarga la página para ver el estado real.");
   }
 
   const headerActions = (
@@ -402,7 +421,10 @@ export default function CaseKanbanBoard({
                       className="group bg-white border border-slate-200 rounded-lg p-3 shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md hover:border-brand-300 transition"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-medium text-slate-900 text-sm leading-snug">{c.title}</h3>
+                        <div className="min-w-0">
+                          <CodeBadge code={c.code} className="mb-1" />
+                          <h3 className="font-medium text-slate-900 text-sm leading-snug">{c.title}</h3>
+                        </div>
                         <IconButton
                           icon={X}
                           label="Quitar del kanban"
@@ -476,6 +498,7 @@ export default function CaseKanbanBoard({
                       onChange={() => toggleSelectedToAdd(c.id)}
                       className="accent-brand-600"
                     />
+                    <CodeBadge code={c.code} />
                     <span className="flex-1">{c.title}</span>
                     <span className="text-xs text-slate-400 shrink-0 truncate max-w-32">{c.suiteName}</span>
                   </label>

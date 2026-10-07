@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import ConfirmModal from "./ConfirmModal";
-import { Button, EmptyState, IconButton, Input } from "@/components/ui";
+import { Button, EmptyState, IconButton, Input, errorMessage, useToast } from "@/components/ui";
 import { Eye, EyeOff, KeyRound, Plus, Trash2 } from "lucide-react";
 
 type ApiKey = { id: string; name: string; key: string; createdAt: string };
@@ -18,6 +18,7 @@ export default function ApiKeysManager({
   const [name, setName] = useState("Playwright CI");
   const [revealed, setRevealed] = useState<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const toast = useToast();
 
   async function createKey(e: React.FormEvent) {
     e.preventDefault();
@@ -26,17 +27,25 @@ export default function ApiKeysManager({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
-    if (res.ok) {
-      const key = await res.json();
-      setKeys((k) => [...k, key]);
-      setRevealed((r) => new Set(r).add(key.id));
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo generar la API key"));
+      return;
     }
+    const key = await res.json();
+    setKeys((k) => [...k, key]);
+    setRevealed((r) => new Set(r).add(key.id));
+    toast.success("API key generada", key.name);
   }
 
   async function removeKey(id: string) {
-    await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
-    setKeys((k) => k.filter((x) => x.id !== id));
     setPendingDelete(null);
+    const res = await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error(await errorMessage(res, "No se pudo eliminar la API key"));
+      return;
+    }
+    setKeys((k) => k.filter((x) => x.id !== id));
+    toast.success("API key eliminada");
   }
 
   function toggleReveal(id: string) {

@@ -116,6 +116,10 @@ export const testCases = pgTable("test_cases", {
   suiteId: text("suite_id")
     .notNull()
     .references(() => testSuites.id, { onDelete: "cascade" }),
+  // Short identifier of the case, e.g. "TC-RF020-06". Unique per project
+  // (checked in the API, since the project is only reachable via the suite).
+  // Playwright results whose title/titlePath include it link to this case.
+  code: text("code"),
   title: text("title").notNull(),
   preconditions: text("preconditions"),
   // steps stored as JSON string: [{ step: string, expected: string }]

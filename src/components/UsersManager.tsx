@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import ResetLinkButton from "./ResetLinkButton";
-import { Badge, Button, IconButton, Input, Label, Modal, Select } from "@/components/ui";
+import { Badge, Button, IconButton, Input, Label, Modal, Select, useToast } from "@/components/ui";
 import { Check, Copy, Plus, X } from "lucide-react";
 
 type Role = "admin" | "lead" | "tester";
@@ -34,6 +34,7 @@ export default function UsersManager({
   const [saving, setSaving] = useState(false);
   const [invite, setInvite] = useState<{ email: string; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const toast = useToast();
 
   async function changeRole(id: string, newRole: Role) {
     setRowError(null);
@@ -48,7 +49,9 @@ export default function UsersManager({
       const data = await res.json().catch(() => ({}));
       setUsers(previous);
       setRowError({ id, message: data.error || "No se pudo cambiar el rol" });
+      return;
     }
+    toast.success("Rol actualizado", ROLE_LABELS[newRole]);
   }
 
   async function addUser(e: React.FormEvent) {
@@ -68,6 +71,7 @@ export default function UsersManager({
       }
       setUsers((u) => [...u, data.user].sort((a, b) => a.name.localeCompare(b.name)));
       setInvite({ email: data.user.email, link: data.link });
+      toast.success("Usuario agregado", "Copia el enlace para que defina su contraseña.");
       setCopied(false);
       setAdding(false);
       setName("");
@@ -115,6 +119,7 @@ export default function UsersManager({
               onClick={async () => {
                 await navigator.clipboard.writeText(invite.link);
                 setCopied(true);
+                toast.success("Enlace copiado");
               }}
             >
               {copied ? "Copiado" : "Copiar"}

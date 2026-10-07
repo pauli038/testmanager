@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, IconButton, Input, Label, Modal, Textarea } from "@/components/ui";
+import { Button, IconButton, Input, Label, Modal, Textarea, useToast } from "@/components/ui";
 import { Pencil } from "lucide-react";
 
 export default function EditProjectButton({
@@ -16,6 +16,7 @@ export default function EditProjectButton({
   const [description, setDescription] = useState(project.description || "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const toast = useToast();
 
   function openModal() {
     setName(project.name);
@@ -44,6 +45,7 @@ export default function EditProjectButton({
         return;
       }
       setOpen(false);
+      toast.success("Proyecto actualizado");
       router.refresh();
     } catch {
       setError("No se pudo conectar con el servidor. Intenta de nuevo.");

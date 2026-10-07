@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   }
   const linked = await db.query.defectTestCases.findMany({
     where: eq(defectTestCases.defectId, id),
-    with: { case: { columns: { id: true, title: true } } },
+    with: { case: { columns: { id: true, code: true, title: true } } },
   });
   const cases = linked.map((l) => l.case);
 

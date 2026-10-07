@@ -22,6 +22,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       errorMessage: testRunCases.errorMessage,
       executedByName: users.name,
       caseId: testCases.id,
+      caseCode: testCases.code,
       caseTitle: testCases.title,
       caseSteps: testCases.steps,
       casePreconditions: testCases.preconditions,

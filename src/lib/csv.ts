@@ -53,6 +53,7 @@ export function parseCsv(input: string): string[][] {
 export type ImportedStep = { step: string; expected: string };
 
 export type ImportedCaseRow = {
+  code?: string;
   title: string;
   preconditions?: string;
   priority?: string;
@@ -64,6 +65,10 @@ export type ImportedCaseRow = {
 };
 
 const HEADER_ALIASES: Record<string, keyof ImportedCaseRow> = {
+  codigo: "code",
+  "código": "code",
+  code: "code",
+  id: "code",
   titulo: "title",
   "título": "title",
   title: "title",
@@ -165,7 +170,7 @@ export function normalizeType(
   );
 }
 
-export const CSV_TEMPLATE = `titulo,precondiciones,prioridad,tipo,tags,automatizado,id_automatizacion,pasos
-Login con credenciales validas,Usuario registrado,alta,smoke,login,si,"LoginTest > should log in with valid credentials","Ir a la pantalla de login::Se muestra el formulario|Ingresar usuario y clave validos y enviar::Se redirige al dashboard"
-Login con clave incorrecta,Usuario registrado,media,functional,login,no,,"Ingresar clave incorrecta::Se muestra un mensaje de error"
+export const CSV_TEMPLATE = `codigo,titulo,precondiciones,prioridad,tipo,tags,automatizado,id_automatizacion,pasos
+TC-LOGIN-01,Login con credenciales validas,Usuario registrado,alta,smoke,login,si,"LoginTest > should log in with valid credentials","Ir a la pantalla de login::Se muestra el formulario|Ingresar usuario y clave validos y enviar::Se redirige al dashboard"
+TC-LOGIN-02,Login con clave incorrecta,Usuario registrado,media,functional,login,no,,"Ingresar clave incorrecta::Se muestra un mensaje de error"
 `;

@@ -13,7 +13,7 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
       // images would otherwise blow past Vercel's response-size limit.
       // The actual bytes are served on demand via /api/attachments/[id].
       attachments: { columns: { id: true, filename: true, retestId: true } },
-      testCases: { with: { case: { columns: { id: true, title: true } } } },
+      testCases: { with: { case: { columns: { id: true, code: true, title: true } } } },
     },
   });
   const initialDefects = all.map((d) => ({
@@ -38,7 +38,7 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
             tc.suiteId,
             suites.map((s) => s.id)
           ),
-        columns: { id: true, title: true },
+        columns: { id: true, code: true, title: true },
       })
     : [];
 

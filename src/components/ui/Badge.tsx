@@ -103,3 +103,18 @@ export function AutomatedBadge({ label = "Automatizado", className }: { label?: 
     </Badge>
   );
 }
+
+// Case code ("TC-RF020-06") in a monospace chip, shown before case titles.
+export function CodeBadge({ code, className }: { code?: string | null; className?: string }) {
+  if (!code) return null;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10 whitespace-nowrap",
+        className
+      )}
+    >
+      {code}
+    </span>
+  );
+}
