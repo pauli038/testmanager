@@ -405,6 +405,23 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   }),
 }));
 
+// ---------- Upload chunks ----------
+// Parts of a large file being uploaded in pieces (see lib/chunk-upload.ts).
+// Kept in the database rather than in memory because on serverless hosts
+// (Vercel) each part can reach a different instance. Rows are removed once
+// the file is assembled; leftovers of abandoned uploads are purged after a day.
+export const uploadChunks = pgTable(
+  "upload_chunks",
+  {
+    id: id(),
+    uploadKey: text("upload_key").notNull(), // "<runCaseId>:<uploadId>"
+    chunkIndex: integer("chunk_index").notNull(),
+    data: text("data").notNull(), // base64
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("upload_chunks_key_index_unique").on(t.uploadKey, t.chunkIndex)]
+);
+
 // ---------- API Keys (for Playwright integration) ----------
 export const apiKeys = pgTable("api_keys", {
   id: id(),
