@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/db";
 import { testRuns, testRunCases, testSuites, testCases, attachments, projects } from "@/db/schema";
 import { eq, and, inArray, ne } from "drizzle-orm";
 import { extractCodes, caseCodes, mentionsCode, normalizeTitle } from "@/lib/case-matching";
 import { requireApiKey } from "@/lib/api-key";
+import { notifyRunFinished } from "@/lib/notifications";
 
 type Outcome = "passed" | "failed" | "skipped";
 type IngestResult = {
@@ -309,6 +310,9 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  // Email to whoever subscribed to failed runs, once the response is out.
+  if (results.some((r) => r.status === "failed")) after(() => notifyRunFinished(run.id));
 
   return NextResponse.json(
     {

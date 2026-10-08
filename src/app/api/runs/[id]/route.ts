@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/db";
 import { testRuns, testRunCases, testCases, users, attachments, defects } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
+import { notifyRunFinished } from "@/lib/notifications";
 import { eq } from "drizzle-orm";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -67,10 +68,11 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { error } = await requireUser();
+  const { user, error } = await requireUser();
   if (error) return error;
   const { id } = await ctx.params;
   const body = await req.json();
+  const before = await db.query.testRuns.findFirst({ where: eq(testRuns.id, id), columns: { status: true } });
 
   const [updated] = await db
     .update(testRuns)
@@ -80,6 +82,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     })
     .where(eq(testRuns.id, id))
     .returning();
+
+  // Marking a run completed notifies its failures (not to whoever completed it).
+  if (updated && body.status === "completed" && before?.status !== "completed") {
+    after(() => notifyRunFinished(id, user!.id));
+  }
 
   return NextResponse.json(updated);
 }

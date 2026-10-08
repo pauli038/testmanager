@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import ApiKeysManager from "@/components/ApiKeysManager";
 import { notFound } from "next/navigation";
 import ProjectSettings from "@/components/ProjectSettings";
+import NotificationSettings from "@/components/NotificationSettings";
 import { auth } from "@/lib/auth";
 import { canDeleteProject } from "@/lib/permissions";
 
@@ -20,6 +21,7 @@ export default async function SettingsPage(props: { params: Promise<{ id: string
       project={{ id: project.id, name: project.name }}
       canDelete={canDeleteProject(role)}
     >
+      <NotificationSettings projectId={id} projectName={project.name.trim()} />
       <ApiKeysManager projectId={id} initialKeys={keys} />
     </ProjectSettings>
   );

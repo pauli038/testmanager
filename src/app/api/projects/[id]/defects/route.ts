@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/db";
 import { defects, defectTestCases } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
+import { notifyDefectCreated } from "@/lib/notifications";
 import { eq } from "drizzle-orm";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -72,6 +73,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
     cases = linked.map((l) => l.case);
   }
+
+  after(() => notifyDefectCreated(defect.id, user!.id));
 
   return NextResponse.json({ ...defect, attachments: [], cases }, { status: 201 });
 }

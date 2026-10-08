@@ -405,6 +405,27 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   }),
 }));
 
+// ---------- Notification subscriptions ----------
+// What each person wants to receive by email for a project. No row = nothing.
+export const notificationSubscriptions = pgTable(
+  "notification_subscriptions",
+  {
+    id: id(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // A run finished with failed or blocked cases.
+    runFailed: boolean("run_failed").notNull().default(false),
+    // New defects at or above this severity; null = none.
+    defectMinSeverity: text("defect_min_severity", { enum: ["high", "critical"] }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("notification_subscriptions_project_user_unique").on(t.projectId, t.userId)]
+);
+
 // ---------- Upload chunks ----------
 // Parts of a large file being uploaded in pieces (see lib/chunk-upload.ts).
 // Kept in the database rather than in memory because on serverless hosts
