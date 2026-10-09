@@ -21,6 +21,8 @@ import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/tes
  */
 interface ResultadoCaso {
   caso: string | null; // TC-RFxxx-yy
+  // Identificador con el que Test Manager reconoce el test (su automationId).
+  idTestManager: string;
   requerimiento: string | null; // RF-xxx
   titulo: string;
   proyecto: string;
@@ -80,6 +82,12 @@ function detectarCi(env: NodeJS.ProcessEnv = process.env): { url?: string; branc
   return {};
 }
 
+// Cómo se identifica en Test Manager un test SIN etiqueta @TC-… (debe coincidir con
+// lo que ya tiene guardado cada proyecto, o se crearían casos nuevos):
+//   "titulo" → solo el título del test                  (Control de Compras)
+//   "ruta"   → "Describe > Sub-describe > título"          (Control Inventarios SAP)
+const ID_SIN_ETIQUETA: "titulo" | "ruta" = "titulo";
+
 const TAMANO_PARTE = 2 * 1024 * 1024; // Test Manager recibe los archivos en partes de 2MB
 
 export default class ReporteApp implements Reporter {
@@ -93,11 +101,13 @@ export default class ReporteApp implements Reporter {
     if (proyecto === 'setup') return;
     const tags = test.tags ?? [];
     // El código del caso sale de la etiqueta @TC-… o, si no tiene, del inicio del título
-    // ("TC-GEN-001 Smoke test…").
-    const caso =
-      tags.find((t) => /^@TC-/.test(t))?.slice(1) ??
-      test.title.match(/^(TC-[A-Z]+\d*-\d+)\b/)?.[1] ??
-      null;
+    // ("TC-GEN-001 Smoke test…"). Solo la etiqueta se usa para identificar el test en
+    // Test Manager: dos tests distintos pueden llevar el mismo código en el título.
+    const etiquetaTC = tags.find((t) => /^@TC-/.test(t))?.slice(1) ?? null;
+    const caso = etiquetaTC ?? test.title.match(/^(TC-[A-Z]+\d*-\d+)\b/)?.[1] ?? null;
+    // Sin etiqueta: la ruta "Describe > título" (sin proyecto ni archivo) o solo el título.
+    const idTestManager =
+      etiquetaTC ?? (ID_SIN_ETIQUETA === "ruta" ? test.titlePath().slice(3).join(" > ") : test.title);
     const requerimiento = tags.find((t) => /^@RN?F-/.test(t))?.slice(1) ?? null;
 
     let estado: ResultadoCaso['estado'];
@@ -117,6 +127,7 @@ export default class ReporteApp implements Reporter {
 
     this.resultados.set(test.id, {
       caso,
+      idTestManager,
       requerimiento,
       titulo: test.title,
       proyecto,
@@ -155,7 +166,7 @@ export default class ReporteApp implements Reporter {
       ci: detectarCi(),
       results: await Promise.all(
         resultados.map(async (r) => ({
-          automationId: r.caso || r.titulo,
+          automationId: r.idTestManager,
           title: r.titulo,
           status: aEstadoTestManager(r.estado),
           durationMs: r.duracionMs,
