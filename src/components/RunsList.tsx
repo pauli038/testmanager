@@ -373,6 +373,7 @@ export default function RunsList({
             setOpen(false);
             setCaseQuery("");
           }}
+          size="lg"
           title="Nuevo test run"
         >
             <form onSubmit={createRun} className="space-y-4">
@@ -401,7 +402,7 @@ export default function RunsList({
                     La casilla de cada suite marca solo los casos que se ven con esta búsqueda.
                   </p>
                 )}
-                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-[26rem] overflow-y-auto">
                   {shownSuites.length === 0 && (
                     <p className="py-4 text-center text-xs text-slate-400">
                       Ningún caso coincide con “{caseQuery.trim()}”.

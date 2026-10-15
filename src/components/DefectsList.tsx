@@ -609,6 +609,7 @@ export default function DefectsList({
             setOpen(false);
             setEditingDefect(null);
           }}
+          size="xl"
           title={editingDefect ? "Editar defecto" : "Nuevo defecto"}
         >
             <form onSubmit={saveDefect} className="space-y-4">
@@ -721,7 +722,7 @@ export default function DefectsList({
                       </span>
                     )}
                   </div>
-                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+                  <div className="max-h-[22rem] overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-0.5">
                     {visibleCases.length === 0 && (
                       <p className="col-span-full py-3 text-center text-xs text-slate-400">
                         Ningún caso coincide con “{caseQuery.trim()}”.
