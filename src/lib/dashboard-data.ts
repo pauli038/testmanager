@@ -25,7 +25,10 @@ function emptyCounts(): StatusCounts {
 export async function getDashboardData(id: string): Promise<DashboardData> {
   const [caseCountRes, runs, rows, defectRows] = await Promise.all([
     db
-      .select({ count: sql<number>`count(*)` })
+      .select({
+        count: sql<number>`count(*)`,
+        automated: sql<number>`count(*) filter (where ${testCases.automated})`,
+      })
       .from(testCases)
       .innerJoin(testSuites, eq(testCases.suiteId, testSuites.id))
       .where(eq(testSuites.projectId, id)),
@@ -233,6 +236,31 @@ export async function getDashboardData(id: string): Promise<DashboardData> {
     trendStart: progressStart,
   };
 
+  // ---------- Automation ----------
+  // Latest result of each case, counted separately for Playwright runs and
+  // manual runs (a case run both ways shows up in both).
+  const sourceByRun = new Map(runs.map((r) => [r.id, r.source]));
+  const latestBySource = { playwright: new Map<string, Status>(), manual: new Map<string, Status>() };
+  for (const r of chronological) {
+    const source = sourceByRun.get(r.runId) === "playwright" ? "playwright" : "manual";
+    latestBySource[source].set(r.caseId, r.status);
+  }
+  const countsOf = (m: Map<string, Status>) => {
+    const c = emptyCounts();
+    for (const s of m.values()) c[s]++;
+    return c;
+  };
+  const automatedCases = Number(caseCountRes[0]?.automated ?? 0);
+  const automation: DashboardData["automation"] = {
+    automatedCases,
+    manualCases: totalCases - automatedCases,
+    percent: pct1(automatedCases, totalCases),
+    playwright: { cases: latestBySource.playwright.size, counts: countsOf(latestBySource.playwright) },
+    manual: { cases: latestBySource.manual.size, counts: countsOf(latestBySource.manual) },
+    playwrightRuns: runs.filter((r) => r.source === "playwright").length,
+    manualRuns: runs.filter((r) => r.source !== "playwright").length,
+  };
+
   // ---------- Run status (last 10 runs) ----------
   const recentIds = new Set(runs.slice(0, 10).map((r) => r.id));
   const recentCounts = emptyCounts();
@@ -241,6 +269,7 @@ export async function getDashboardData(id: string): Promise<DashboardData> {
   return {
     totalCases,
     completion,
+    automation,
     totalRuns: runs.length,
     active: {
       count: activeRuns.length,

@@ -28,12 +28,14 @@ export default function CasesView({
   initialCases,
   initialColumns,
   initialKanbanCases,
+  initialCaseId,
 }: {
   projectId: string;
   initialSuites: Suite[];
   initialCases: Record<string, TestCase[]>;
   initialColumns: KanbanColumn[];
   initialKanbanCases: KanbanCase[];
+  initialCaseId?: string;
 }) {
   const [view, setView] = useState<"suites" | "kanban">("suites");
   const [headerActionsEl, setHeaderActionsEl] = useState<HTMLDivElement | null>(null);
@@ -57,6 +59,7 @@ export default function CasesView({
           projectId={projectId}
           initialSuites={initialSuites}
           initialCases={initialCases}
+          initialCaseId={initialCaseId}
           headerActionsContainer={headerActionsEl}
         />
       ) : (

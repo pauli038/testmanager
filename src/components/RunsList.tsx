@@ -13,8 +13,10 @@ import {
   Input,
   Label,
   Modal,
+  SearchInput,
   Segmented,
   errorMessage,
+  matchesSearch,
   useToast,
 } from "@/components/ui";
 import {
@@ -77,6 +79,13 @@ export default function RunsList({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
+  const [caseQuery, setCaseQuery] = useState("");
+  // Cases shown per suite: with a search, only the matching ones.
+  const shownCases = (suiteId: string) =>
+    (casesBySuite[suiteId] || []).filter((c) => matchesSearch(caseQuery, c.code, c.title));
+  const shownSuites = caseQuery.trim()
+    ? suites.filter((s) => matchesSearch(caseQuery, s.name) || shownCases(s.id).length > 0)
+    : suites;
   const toast = useToast();
 
   useEffect(() => {
@@ -132,8 +141,9 @@ export default function RunsList({
     });
   }
 
+  // Ticks/unticks the suite's cases that are on screen (all of them without a search).
   function toggleSuite(id: string) {
-    const ids = (casesBySuite[id] || []).map((c) => c.id);
+    const ids = shownCases(id).map((c) => c.id);
     setSelected((s) => {
       const next = new Set(s);
       const allSelected = ids.every((i) => next.has(i));
@@ -358,7 +368,13 @@ export default function RunsList({
       )}
 
       {open && (
-        <Modal onClose={() => setOpen(false)} title="Nuevo test run">
+        <Modal
+          onClose={() => {
+            setOpen(false);
+            setCaseQuery("");
+          }}
+          title="Nuevo test run"
+        >
             <form onSubmit={createRun} className="space-y-4">
               <div>
                 <Label>Nombre</Label>
@@ -373,22 +389,40 @@ export default function RunsList({
                 <Label className="mb-2">
                   Selecciona los casos a incluir ({selected.size})
                 </Label>
+                <SearchInput
+                  value={caseQuery}
+                  onChange={setCaseQuery}
+                  placeholder="Buscar por código, nombre o suite…"
+                  aria-label="Buscar casos para el run"
+                  className="mb-2"
+                />
+                {caseQuery.trim() && (
+                  <p className="mb-2 text-xs text-slate-500">
+                    La casilla de cada suite marca solo los casos que se ven con esta búsqueda.
+                  </p>
+                )}
                 <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                  {suites.map((s) => (
+                  {shownSuites.length === 0 && (
+                    <p className="py-4 text-center text-xs text-slate-400">
+                      Ningún caso coincide con “{caseQuery.trim()}”.
+                    </p>
+                  )}
+                  {shownSuites.map((s) => (
                     <div key={s.id} className="p-2">
                       <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={(casesBySuite[s.id] || []).every((c) =>
-                            selected.has(c.id)
-                          ) && (casesBySuite[s.id] || []).length > 0}
+                          checked={shownCases(s.id).every((c) => selected.has(c.id)) && shownCases(s.id).length > 0}
                           onChange={() => toggleSuite(s.id)}
                         />
                         <Folder size={14} className="text-slate-400" aria-hidden />
                         {s.name}
+                        <span className="text-xs font-normal text-slate-400 tabular-nums">
+                          ({shownCases(s.id).length})
+                        </span>
                       </label>
                       <div className="pl-6 mt-1 space-y-1">
-                        {(casesBySuite[s.id] || []).map((c) => (
+                        {shownCases(s.id).map((c) => (
                           <label
                             key={c.id}
                             className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"

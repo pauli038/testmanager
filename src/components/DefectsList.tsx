@@ -14,8 +14,10 @@ import {
   PriorityBadge,
   Select,
   Textarea,
+  SearchInput,
   buttonClasses,
   cn,
+  matchesSearch,
   errorMessage,
   useToast,
 } from "@/components/ui";
@@ -116,15 +118,20 @@ export default function DefectsList({
   projectId,
   initialDefects,
   cases,
+  initialDefectId,
 }: {
   projectId: string;
   initialDefects: Defect[];
   cases: CaseRef[];
+  // Defect to open right away (from the global search, ?defect=<id>).
+  initialDefectId?: string;
 }) {
   const [defects, setDefects] = useState(initialDefects);
   const [open, setOpen] = useState(false);
   const [editingDefect, setEditingDefect] = useState<Defect | null>(null);
-  const [viewingDefect, setViewingDefect] = useState<Defect | null>(null);
+  const [viewingDefect, setViewingDefect] = useState<Defect | null>(
+    () => initialDefects.find((d) => d.id === initialDefectId) ?? null
+  );
   const [viewingImage, setViewingImage] = useState<(Attachment & { defectId: string }) | null>(
     null
   );
@@ -136,6 +143,13 @@ export default function DefectsList({
   const [severity, setSeverity] = useState("medium");
   const [steps, setSteps] = useState<string[]>([""]);
   const [caseIds, setCaseIds] = useState<string[]>([]);
+  const [caseQuery, setCaseQuery] = useState("");
+  const visibleCases = caseQuery.trim()
+    ? [
+        ...cases.filter((c) => caseIds.includes(c.id)),
+        ...cases.filter((c) => !caseIds.includes(c.id) && matchesSearch(caseQuery, c.code, c.title)),
+      ]
+    : cases;
   const [retests, setRetests] = useState<RetestEntry[]>([]);
   const [moduleField, setModuleField] = useState("");
   const [environment, setEnvironment] = useState("");
@@ -170,6 +184,7 @@ export default function DefectsList({
     setSeverity("medium");
     setSteps([""]);
     setCaseIds([]);
+    setCaseQuery("");
     setRetests([]);
     setModuleField("");
     setEnvironment("");
@@ -185,6 +200,7 @@ export default function DefectsList({
     const parsedSteps = parseSteps(d.stepsToReproduce);
     setSteps(parsedSteps.length ? parsedSteps : [""]);
     setCaseIds(d.cases.map((c) => c.id));
+    setCaseQuery("");
     setRetests(parseRetests(d.retests));
     setModuleField(d.module || "");
     setEnvironment(d.environment || "");
@@ -690,8 +706,28 @@ export default function DefectsList({
                   Casos de prueba relacionados
                 </Label>
                 {cases.length ? (
-                  <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
-                    {cases.map((c) => (
+                  <>
+                  <div className="flex items-center gap-2 mb-2">
+                    <SearchInput
+                      value={caseQuery}
+                      onChange={setCaseQuery}
+                      placeholder="Buscar por código o nombre…"
+                      aria-label="Buscar casos de prueba relacionados"
+                      className="flex-1"
+                    />
+                    {caseIds.length > 0 && (
+                      <span className="shrink-0 text-xs text-slate-500 tabular-nums">
+                        {caseIds.length} seleccionado{caseIds.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-300 p-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3">
+                    {visibleCases.length === 0 && (
+                      <p className="col-span-full py-3 text-center text-xs text-slate-400">
+                        Ningún caso coincide con “{caseQuery.trim()}”.
+                      </p>
+                    )}
+                    {visibleCases.map((c) => (
                       <label
                         key={c.id}
                         className="flex items-center gap-2 px-1 py-1 text-sm text-slate-700 hover:bg-slate-50 rounded cursor-pointer"
@@ -709,6 +745,7 @@ export default function DefectsList({
                       </label>
                     ))}
                   </div>
+                  </>
                 ) : (
                   <p className="text-xs text-slate-400">No hay casos de prueba en este proyecto.</p>
                 )}
@@ -957,7 +994,7 @@ export default function DefectsList({
 
       {viewingImage && (
         <div
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+          className="fixed inset-0 bg-slate-950/80 dark:bg-black/85 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
           onClick={() => setViewingImage(null)}
         >
           <div

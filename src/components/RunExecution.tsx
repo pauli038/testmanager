@@ -577,7 +577,7 @@ export default function RunExecution({
                               {isVideo ? (
                                 <>
                                   <video src={a.url} className="w-full h-full object-cover" muted />
-                                  <span className="absolute inset-0 flex items-center justify-center bg-slate-900/25 text-white">
+                                  <span className="absolute inset-0 flex items-center justify-center bg-slate-900/25 dark:bg-black/35 text-white">
                                     <Play size={18} aria-hidden />
                                   </span>
                                 </>

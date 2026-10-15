@@ -15,8 +15,10 @@ const DEFAULT_COLUMNS = [
 
 export default async function SuitesPage(props: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ case?: string }>;
 }) {
   const { id } = await props.params;
+  const { case: caseId } = await props.searchParams;
 
   const suites = await db.query.testSuites.findMany({
     where: eq(testSuites.projectId, id),
@@ -86,6 +88,9 @@ export default async function SuitesPage(props: {
 
   return (
     <CasesView
+      // A new ?case= (from the search) remounts it so that case opens.
+      key={caseId ?? "cases"}
+      initialCaseId={caseId}
       projectId={id}
       initialSuites={suites}
       initialCases={casesWithStatus}

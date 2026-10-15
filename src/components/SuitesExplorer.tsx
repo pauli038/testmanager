@@ -50,24 +50,30 @@ export default function SuitesExplorer({
   projectId,
   initialSuites,
   initialCases,
+  initialCaseId,
   headerActionsContainer,
 }: {
   projectId: string;
   initialSuites: Suite[];
   initialCases: Record<string, TestCase[]>;
+  // Case to open right away (from the global search, ?case=<id>).
+  initialCaseId?: string;
   headerActionsContainer?: HTMLDivElement | null;
 }) {
   const router = useRouter();
   const [suites, setSuites] = useState(initialSuites);
   const [casesBySuite, setCasesBySuite] = useState(initialCases);
+  const linkedCase = initialCaseId
+    ? Object.values(initialCases).flat().find((c) => c.id === initialCaseId) ?? null
+    : null;
   const [selectedSuite, setSelectedSuite] = useState<string | null>(
-    initialSuites[0]?.id || null
+    linkedCase?.suiteId ?? initialSuites[0]?.id ?? null
   );
   const [newSuiteName, setNewSuiteName] = useState("");
   const [showCaseModal, setShowCaseModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [editingCase, setEditingCase] = useState<TestCase | null>(null);
-  const [viewingCase, setViewingCase] = useState<TestCase | null>(null);
+  const [viewingCase, setViewingCase] = useState<TestCase | null>(linkedCase);
   const [pendingDeleteSuite, setPendingDeleteSuite] = useState<string | null>(null);
   const [pendingDeleteCase, setPendingDeleteCase] = useState<{ caseId: string; suiteId: string } | null>(
     null

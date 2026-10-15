@@ -15,3 +15,4 @@ export {
 export { cn } from "./cn";
 export { Segmented } from "./Segmented";
 export { ToastProvider, useToast, errorMessage } from "./Toast";
+export { SearchInput, matchesSearch, normalizeSearch } from "./SearchInput";

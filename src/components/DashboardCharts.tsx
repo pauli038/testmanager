@@ -30,6 +30,7 @@ import {
   Download,
   FlaskConical,
   Flag,
+  Hand,
   Minus,
   RefreshCw,
   TrendingDown,
@@ -50,6 +51,16 @@ export type DashboardData = {
     change: number;
     trend: { day: string; percent: number }[];
     trendStart: string;
+  };
+  // Share of automated cases, and latest results split by where they ran.
+  automation: {
+    automatedCases: number;
+    manualCases: number;
+    percent: number;
+    playwright: { cases: number; counts: StatusCounts };
+    manual: { cases: number; counts: StatusCounts };
+    playwrightRuns: number;
+    manualRuns: number;
   };
   totalRuns: number;
   active: {
@@ -112,7 +123,15 @@ const STATUS_LABELS: Record<Status, string> = {
 const STATUS_ORDER: Status[] = ["passed", "failed", "blocked", "skipped", "untested"];
 
 const INK_SECONDARY = "#64748b";
-const GRIDLINE = "#e2e8f0";
+// Translucent so it reads on light and dark cards alike.
+const GRIDLINE = "rgba(148, 163, 184, 0.3)";
+const TOOLTIP_STYLE = {
+  fontSize: 12,
+  borderRadius: 8,
+  borderColor: GRIDLINE,
+  backgroundColor: "var(--surface)",
+  color: "var(--color-slate-700)",
+};
 const AVATAR_COLORS = ["#0d9488", "#2563eb", "#9333ea", "#db2777", "#ea580c", "#65a30d"];
 
 const shortDay = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}`;
@@ -129,6 +148,7 @@ export default function DashboardCharts({
     <div className="space-y-4">
       <ReportDownload projectId={projectId} />
       <CompletionCard completion={data.completion} />
+      <AutomationCard automation={data.automation} />
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="space-y-4 min-w-0">
           <BurndownCard burndown={data.burndown} />
@@ -278,6 +298,103 @@ function ReportDownload({ projectId }: { projectId: string }) {
   );
 }
 
+// ---------- Automation coverage ----------
+function SourceResults({
+  icon: Icon,
+  label,
+  runs,
+  data,
+}: {
+  icon: typeof Bot;
+  label: string;
+  runs: number;
+  data: { cases: number; counts: StatusCounts };
+}) {
+  const executed = data.cases;
+  const passRate = pct(data.counts.passed, executed);
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
+          <Icon size={15} className="text-slate-400" aria-hidden />
+          {label}
+        </p>
+        <p className="text-xs text-slate-500 tabular-nums">
+          {executed ? (
+            <>
+              <span className="font-semibold text-slate-800">{passRate}%</span> aprobado
+            </>
+          ) : (
+            "sin ejecuciones"
+          )}
+        </p>
+      </div>
+      <div className="flex h-2.5 rounded-full overflow-hidden bg-slate-100 mt-2">
+        {executed > 0 &&
+          STATUS_ORDER.filter((s) => s !== "untested" && data.counts[s]).map((s) => (
+            <span
+              key={s}
+              title={`${COMPLETION_LABELS[s]}: ${data.counts[s]}`}
+              style={{ width: `${(data.counts[s] / executed) * 100}%`, backgroundColor: STATUS_COLORS[s] }}
+            />
+          ))}
+      </div>
+      <p className="text-xs text-slate-500 mt-1.5 tabular-nums">
+        {executed} caso{executed === 1 ? "" : "s"} con resultado · {runs} run{runs === 1 ? "" : "s"}
+        {executed > 0 &&
+          (["failed", "blocked", "skipped"] as const)
+            .filter((s) => data.counts[s])
+            .map((s) => ` · ${data.counts[s]} ${COMPLETION_LABELS[s].toLowerCase()}`)
+            .join("")}
+      </p>
+    </div>
+  );
+}
+
+function AutomationCard({ automation }: { automation: DashboardData["automation"] }) {
+  const total = automation.automatedCases + automation.manualCases;
+  if (total === 0) return null;
+  return (
+    <Card title="Automatización">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] lg:items-center">
+        <div>
+          <div className="flex items-end gap-3 flex-wrap">
+            <span className="text-4xl font-semibold tracking-tight text-slate-900 leading-none tabular-nums">
+              {Math.round(automation.percent)}%
+            </span>
+            <span className="text-sm text-slate-500 pb-1">de los casos está automatizado</span>
+          </div>
+          <div className="flex h-3 rounded-full overflow-hidden bg-slate-100 mt-4">
+            <span className="bg-purple-500" style={{ width: `${automation.percent}%` }} />
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-slate-600 tabular-nums">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+              {automation.automatedCases} automatizados
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+              {automation.manualCases} solo manuales
+            </span>
+          </div>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <SourceResults
+            icon={Bot}
+            label="Playwright"
+            runs={automation.playwrightRuns}
+            data={automation.playwright}
+          />
+          <SourceResults icon={Hand} label="Manual" runs={automation.manualRuns} data={automation.manual} />
+        </div>
+      </div>
+      <p className="text-xs text-slate-400 mt-4">
+        Resultados: el más reciente de cada caso en runs de Playwright y en runs manuales, por separado.
+      </p>
+    </Card>
+  );
+}
+
 function CompletionCard({ completion }: { completion: DashboardData["completion"] }) {
   const { totalCases, counts, percent, change, trend } = completion;
   if (totalCases === 0) {
@@ -371,7 +488,7 @@ function CompletionCard({ completion }: { completion: DashboardData["completion"
                 tickLine={false}
               />
               <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: GRIDLINE }}
+                contentStyle={TOOLTIP_STYLE}
                 labelFormatter={(k: any) => shortDay(String(k))}
                 formatter={(value: any) => [`${value}%`, "Completado"]}
               />
@@ -427,7 +544,7 @@ function BurndownCard({ burndown }: { burndown: DashboardData["burndown"] }) {
               {/* Bars use their own scale so they stay in the lower third of the chart. */}
               <YAxis yAxisId="bars" hide domain={[0, maxExecuted * 3]} />
               <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: GRIDLINE }}
+                contentStyle={TOOLTIP_STYLE}
                 labelFormatter={(k: any) => shortDay(String(k))}
                 formatter={(value: any, key: any) => {
                   const labels: Record<string, string> = {
@@ -545,7 +662,7 @@ function ActivityCard({ activity }: { activity: DashboardData["activity"] }) {
                   allowDecimals={false}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: GRIDLINE }}
+                  contentStyle={TOOLTIP_STYLE}
                   labelFormatter={(k: any) => shortDay(String(k))}
                   formatter={(value: any, key: any) => [
                     value,
@@ -605,7 +722,7 @@ function ActiveCard({
       <div className="flex items-center gap-4">
         <div className="relative w-28 h-28 shrink-0">
           <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-            <circle cx="50" cy="50" r={r} fill="none" stroke="#dbeafe" strokeWidth="9" />
+            <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(59, 130, 246, 0.18)" strokeWidth="9" />
             <circle
               cx="50"
               cy="50"
@@ -946,7 +1063,7 @@ function RunStatusCard({ counts }: { counts: StatusCounts }) {
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, borderColor: GRIDLINE }}
+                    contentStyle={TOOLTIP_STYLE}
                     formatter={(value: any, name: any) => [`${value} (${pct(Number(value), total)}%)`, name]}
                   />
                 </PieChart>

@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Dark mode follows the "dark" class on <html> (set by ThemeScript from the
+   saved preference or the system setting), so `dark:` utilities work too. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Design tokens. "brand" is the app's main color: change it here and every
    button, link, tab and focus ring follows. */
 @theme {
@@ -15,6 +19,103 @@
   --color-brand-700: oklch(51.1% 0.096 186.391);
   --color-brand-800: oklch(43.7% 0.078 188.216);
   --color-brand-900: oklch(38.6% 0.063 188.416);
+}
+
+/* Background of cards, modals, inputs and chart tooltips. */
+:root {
+  --surface: #ffffff;
+}
+
+/* ---------- Dark theme ----------
+   Instead of a `dark:` variant on every element, the palette itself changes:
+   - grays (slate) are inverted: light backgrounds become dark, dark text light;
+   - "white" surfaces (bg-white) become the dark card color;
+   - soft tints (50–200: badges, banners) become dark translucent versions;
+   - dark text shades (700–900) become light ones.
+   Fills (500–600: buttons, bars, status colors) stay the same. */
+.dark {
+  color-scheme: dark;
+  --surface: #131c2e;
+
+  --color-slate-50: #0b1120;
+  --color-slate-100: #172033;
+  --color-slate-200: #263247;
+  --color-slate-300: #3a465c;
+  --color-slate-400: #7b889e;
+  --color-slate-500: #97a3b6;
+  --color-slate-600: #b8c2d1;
+  --color-slate-700: #d3dae4;
+  --color-slate-800: #e5e9f0;
+  --color-slate-900: #f1f4f8;
+  --color-slate-950: #f8fafc;
+
+  --color-brand-50: color-mix(in oklab, #14b8a6 14%, #131c2e);
+  --color-brand-100: color-mix(in oklab, #14b8a6 24%, #131c2e);
+  --color-brand-200: color-mix(in oklab, #14b8a6 38%, #131c2e);
+  --color-brand-700: #5eead4;
+  --color-brand-800: #99f6e4;
+  --color-brand-900: #ccfbf1;
+
+  --color-red-50: color-mix(in oklab, #ef4444 14%, #131c2e);
+  --color-red-100: color-mix(in oklab, #ef4444 24%, #131c2e);
+  --color-red-200: color-mix(in oklab, #ef4444 38%, #131c2e);
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+  --color-red-900: #fee2e2;
+
+  --color-emerald-50: color-mix(in oklab, #10b981 14%, #131c2e);
+  --color-emerald-100: color-mix(in oklab, #10b981 24%, #131c2e);
+  --color-emerald-200: color-mix(in oklab, #10b981 38%, #131c2e);
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #d1fae5;
+
+  --color-amber-50: color-mix(in oklab, #f59e0b 14%, #131c2e);
+  --color-amber-100: color-mix(in oklab, #f59e0b 24%, #131c2e);
+  --color-amber-200: color-mix(in oklab, #f59e0b 38%, #131c2e);
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+
+  --color-cyan-50: color-mix(in oklab, #06b6d4 14%, #131c2e);
+  --color-cyan-100: color-mix(in oklab, #06b6d4 24%, #131c2e);
+  --color-cyan-200: color-mix(in oklab, #06b6d4 38%, #131c2e);
+  --color-cyan-700: #67e8f9;
+  --color-cyan-800: #a5f3fc;
+  --color-cyan-900: #cffafe;
+
+  --color-purple-50: color-mix(in oklab, #a855f7 16%, #131c2e);
+  --color-purple-100: color-mix(in oklab, #a855f7 26%, #131c2e);
+  --color-purple-200: color-mix(in oklab, #a855f7 40%, #131c2e);
+  --color-purple-700: #d8b4fe;
+  --color-purple-800: #e9d5ff;
+  --color-purple-900: #f3e8ff;
+
+  --color-orange-50: color-mix(in oklab, #f97316 14%, #131c2e);
+  --color-orange-100: color-mix(in oklab, #f97316 24%, #131c2e);
+  --color-orange-200: color-mix(in oklab, #f97316 38%, #131c2e);
+  --color-orange-700: #fdba74;
+  --color-orange-800: #fed7aa;
+  --color-orange-900: #ffedd5;
+
+  --color-blue-50: color-mix(in oklab, #3b82f6 14%, #131c2e);
+  --color-blue-100: color-mix(in oklab, #3b82f6 24%, #131c2e);
+  --color-blue-200: color-mix(in oklab, #3b82f6 38%, #131c2e);
+  --color-blue-700: #93c5fd;
+  --color-blue-800: #bfdbfe;
+  --color-blue-900: #dbeafe;
+}
+
+/* "white" stays white for text and outlines on colored backgrounds (buttons,
+   the navbar); only white surfaces turn dark. */
+.dark .bg-white {
+  background-color: var(--surface);
+}
+.dark .bg-white\/50 {
+  background-color: color-mix(in oklab, var(--surface) 50%, transparent);
+}
+.dark .border-white {
+  border-color: var(--surface);
 }
 
 body {

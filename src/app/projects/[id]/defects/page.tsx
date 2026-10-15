@@ -3,8 +3,12 @@ import { defects, testSuites } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import DefectsList from "@/components/DefectsList";
 
-export default async function DefectsPage(props: { params: Promise<{ id: string }> }) {
+export default async function DefectsPage(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ defect?: string }>;
+}) {
   const { id } = await props.params;
+  const { defect: defectId } = await props.searchParams;
   const all = await db.query.defects.findMany({
     where: eq(defects.projectId, id),
     orderBy: (d, { desc }) => [desc(d.createdAt)],
@@ -42,5 +46,14 @@ export default async function DefectsPage(props: { params: Promise<{ id: string 
       })
     : [];
 
-  return <DefectsList projectId={id} initialDefects={initialDefects} cases={cases} />;
+  return (
+    <DefectsList
+      // A new ?defect= (from the search) remounts it so that defect opens.
+      key={defectId ?? "defects"}
+      projectId={id}
+      initialDefects={initialDefects}
+      cases={cases}
+      initialDefectId={defectId}
+    />
+  );
 }

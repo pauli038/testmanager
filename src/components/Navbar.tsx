@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ChevronDown, FlaskConical, FolderKanban, LogOut, Users } from "lucide-react";
+import { ChevronDown, FlaskConical, FolderKanban, LogOut, Monitor, Moon, Sun, Users } from "lucide-react";
 import { cn } from "@/components/ui";
+import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme";
+import CommandPalette from "./CommandPalette";
 
 const ROLE_LABEL: Record<string, string> = {
   admin: "Admin",
@@ -27,6 +29,21 @@ export default function Navbar({
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // Read once the menu opens (localStorage isn't available while rendering on the server).
+  const [theme, setTheme] = useState<ThemePreference>("system");
+
+  // With "Sistema", follow the OS when it switches between light and dark.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => getThemePreference() === "system" && setThemePreference("system");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  function chooseTheme(t: ThemePreference) {
+    setTheme(t);
+    setThemePreference(t);
+  }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -48,9 +65,9 @@ export default function Navbar({
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-brand-700 shadow-sm">
-      <div className="w-full px-4 sm:px-8 h-14 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-6 min-w-0">
+    <header className="sticky top-0 z-40 bg-brand-700 shadow-sm dark:bg-slate-100 dark:border-b dark:border-slate-200">
+      <div className="w-full px-4 sm:px-8 h-14 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
           <Link href="/" className="flex items-center gap-2 font-semibold text-white shrink-0">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/20">
               <FlaskConical size={16} aria-hidden />
@@ -66,20 +83,25 @@ export default function Navbar({
                   "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
                   l.active
                     ? "bg-white/15 text-white font-medium"
-                    : "text-brand-100 hover:text-white hover:bg-white/10"
+                    : "text-brand-100 hover:text-white hover:bg-white/10 dark:text-slate-600"
                 )}
               >
                 <l.icon size={15} aria-hidden />
-                {l.label}
+                <span className="hidden sm:inline">{l.label}</span>
               </Link>
             ))}
           </nav>
         </div>
 
+        <div className="flex items-center gap-2">
+        <CommandPalette />
         <div className="relative" ref={menuRef}>
           <button
             type="button"
-            onClick={() => setMenuOpen((o) => !o)}
+            onClick={() => {
+              setTheme(getThemePreference());
+              setMenuOpen((o) => !o);
+            }}
             aria-expanded={menuOpen}
             aria-haspopup="menu"
             className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 text-white hover:bg-white/10 transition-colors"
@@ -88,7 +110,7 @@ export default function Navbar({
               {initials(user.name, user.email)}
             </span>
             <span className="hidden md:block text-sm max-w-40 truncate">{user.name}</span>
-            <ChevronDown size={14} className="text-brand-100" aria-hidden />
+            <ChevronDown size={14} className="text-brand-100 dark:text-slate-500" aria-hidden />
           </button>
 
           {menuOpen && (
@@ -105,6 +127,34 @@ export default function Navbar({
                   </span>
                 )}
               </div>
+              <div className="px-4 py-3 border-b border-slate-100">
+                <p className="text-xs font-medium text-slate-500 mb-2">Tema</p>
+                <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-0.5" role="group" aria-label="Tema">
+                  {(
+                    [
+                      { value: "light", label: "Claro", icon: Sun },
+                      { value: "dark", label: "Oscuro", icon: Moon },
+                      { value: "system", label: "Sistema", icon: Monitor },
+                    ] as const
+                  ).map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      aria-pressed={theme === o.value}
+                      onClick={() => chooseTheme(o.value)}
+                      className={cn(
+                        "flex flex-col items-center gap-0.5 rounded-md py-1.5 text-[11px] transition-colors",
+                        theme === o.value
+                          ? "bg-white text-slate-900 shadow-sm"
+                          : "text-slate-500 hover:text-slate-800"
+                      )}
+                    >
+                      <o.icon size={14} aria-hidden />
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button
                 role="menuitem"
                 onClick={() => signOut({ callbackUrl: "/login" })}
@@ -115,6 +165,7 @@ export default function Navbar({
               </button>
             </div>
           )}
+        </div>
         </div>
       </div>
     </header>

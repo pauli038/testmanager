@@ -47,7 +47,7 @@ export function Modal({
   return (
     <div
       className={cn(
-        "fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] flex items-center justify-center p-4",
+        "fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-[2px] flex items-center justify-center p-4",
         zIndex
       )}
     >
