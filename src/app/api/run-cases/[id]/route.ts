@@ -27,3 +27,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
   return NextResponse.json(updated);
 }
+
+// Takes a case out of a run (not from the project). Its evidence goes with it;
+// defects reported from it are kept.
+export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const { error } = await requireUser();
+  if (error) return error;
+  const { id } = await ctx.params;
+  await db.delete(testRunCases).where(eq(testRunCases.id, id));
+  return NextResponse.json({ ok: true });
+}

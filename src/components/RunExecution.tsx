@@ -33,6 +33,7 @@ import {
   ListChecks,
   Play,
   Plus,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -371,6 +372,18 @@ export default function RunExecution({
     }
   }
 
+  // Removes right away, without asking: a case left out by mistake can be
+  // added back with "Agregar casos".
+  async function removeRunCase(runCaseId: string) {
+    const previous = runCases;
+    setRunCases((rc) => rc.filter((c) => c.id !== runCaseId));
+    const res = await fetch(`/api/run-cases/${runCaseId}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) {
+      setRunCases(previous);
+      toast.error("No se pudo quitar el caso del run");
+    }
+  }
+
   async function addCases() {
     setSavingCases(true);
     try {
@@ -545,6 +558,17 @@ export default function RunExecution({
                       </button>
                     );
                   })}
+                  <button
+                    title="Quitar del run"
+                    aria-label="Quitar del run"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeRunCase(c.id);
+                    }}
+                    className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 size={16} aria-hidden />
+                  </button>
                 </div>
               </div>
 
