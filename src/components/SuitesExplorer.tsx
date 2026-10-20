@@ -17,10 +17,12 @@ import {
   Label,
   Modal,
   PriorityBadge,
+  SearchInput,
   Select,
   StatusBadge,
   Textarea,
   errorMessage,
+  matchesSearch,
   useToast,
   type RunStatus,
 } from "@/components/ui";
@@ -78,6 +80,9 @@ export default function SuitesExplorer({
   const [pendingDeleteCase, setPendingDeleteCase] = useState<{ caseId: string; suiteId: string } | null>(
     null
   );
+  const [caseQuery, setCaseQuery] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const toast = useToast();
 
   async function createSuite(e: React.FormEvent) {
@@ -164,6 +169,20 @@ export default function SuitesExplorer({
   }
 
   const currentCases = selectedSuite ? casesBySuite[selectedSuite] || [] : [];
+  const filtersActive = Boolean(caseQuery.trim() || priorityFilter || statusFilter);
+  const shownCases = currentCases.filter(
+    (c) =>
+      matchesSearch(caseQuery, c.code, c.title, c.tags, c.automationId) &&
+      (!priorityFilter || c.priority === priorityFilter) &&
+      (!statusFilter ||
+        (statusFilter === "none" ? !isRunStatus(c.lastStatus) : c.lastStatus === statusFilter))
+  );
+
+  function clearFilters() {
+    setCaseQuery("");
+    setPriorityFilter("");
+    setStatusFilter("");
+  }
 
   const headerActions = selectedSuite && (
     <>
@@ -254,8 +273,51 @@ export default function SuitesExplorer({
               </h3>
               {!headerActionsContainer && <div className="flex gap-2">{headerActions}</div>}
             </div>
+            {currentCases.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <SearchInput
+                  value={caseQuery}
+                  onChange={setCaseQuery}
+                  placeholder="Buscar por código, nombre o etiqueta…"
+                  aria-label="Buscar casos de prueba"
+                  className="flex-1 min-w-[14rem]"
+                />
+                <div className="w-44">
+                  <Select
+                    value={priorityFilter}
+                    onChange={(e) => setPriorityFilter(e.target.value)}
+                    aria-label="Filtrar por prioridad"
+                  >
+                    <option value="">Todas las prioridades</option>
+                    <option value="critical">Crítica</option>
+                    <option value="high">Alta</option>
+                    <option value="medium">Media</option>
+                    <option value="low">Baja</option>
+                  </Select>
+                </div>
+                <div className="w-44">
+                  <Select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    aria-label="Filtrar por último estado"
+                  >
+                    <option value="">Todos los estados</option>
+                    <option value="passed">Passed</option>
+                    <option value="failed">Failed</option>
+                    <option value="blocked">Blocked</option>
+                    <option value="skipped">Skipped</option>
+                    <option value="none">Sin ejecutar</option>
+                  </Select>
+                </div>
+                {filtersActive && (
+                  <span className="text-xs text-slate-500 tabular-nums">
+                    {shownCases.length} de {currentCases.length}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
-              {currentCases.map((c) => (
+              {shownCases.map((c) => (
                 <div
                   key={c.id}
                   className={`bg-white border rounded-xl p-4 shadow-sm hover:border-brand-300 transition-colors ${
@@ -306,6 +368,14 @@ export default function SuitesExplorer({
                   </div>
                 </div>
               ))}
+              {currentCases.length > 0 && shownCases.length === 0 && (
+                <div className="py-8 text-center text-sm text-slate-400">
+                  Ningún caso coincide con los filtros.{" "}
+                  <button onClick={clearFilters} className="text-brand-700 hover:underline">
+                    Limpiar filtros
+                  </button>
+                </div>
+              )}
               {currentCases.length === 0 && (
                 <EmptyState
                   icon={FileText}
