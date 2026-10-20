@@ -1,22 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { CaseRef } from "@/lib/project-cases";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import CasePicker from "./CasePicker";
 import ConfirmModal from "./ConfirmModal";
 import {
   Badge,
   Button,
-  CodeBadge,
   EmptyState,
   IconButton,
   Input,
   Label,
   Modal,
-  SearchInput,
   Segmented,
   errorMessage,
-  matchesSearch,
   useToast,
 } from "@/components/ui";
 import {
@@ -24,7 +23,6 @@ import {
   CheckCircle2,
   ExternalLink,
   Eye,
-  Folder,
   GitBranch,
   Hand,
   Loader2,
@@ -37,7 +35,6 @@ import {
 } from "lucide-react";
 
 type Suite = { id: string; name: string };
-type CaseRef = { id: string; code: string | null; title: string };
 type Run = {
   id: string;
   name: string;
@@ -79,13 +76,6 @@ export default function RunsList({
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
-  const [caseQuery, setCaseQuery] = useState("");
-  // Cases shown per suite: with a search, only the matching ones.
-  const shownCases = (suiteId: string) =>
-    (casesBySuite[suiteId] || []).filter((c) => matchesSearch(caseQuery, c.code, c.title));
-  const shownSuites = caseQuery.trim()
-    ? suites.filter((s) => matchesSearch(caseQuery, s.name) || shownCases(s.id).length > 0)
-    : suites;
   const toast = useToast();
 
   useEffect(() => {
@@ -131,25 +121,6 @@ export default function RunsList({
     }
     setRuns((rs) => rs.filter((r) => r.id !== id));
     toast.success("Run eliminado");
-  }
-
-  function toggleCase(id: string) {
-    setSelected((s) => {
-      const next = new Set(s);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  // Ticks/unticks the suite's cases that are on screen (all of them without a search).
-  function toggleSuite(id: string) {
-    const ids = shownCases(id).map((c) => c.id);
-    setSelected((s) => {
-      const next = new Set(s);
-      const allSelected = ids.every((i) => next.has(i));
-      ids.forEach((i) => (allSelected ? next.delete(i) : next.add(i)));
-      return next;
-    });
   }
 
   async function createRun(e: React.FormEvent) {
@@ -369,10 +340,7 @@ export default function RunsList({
 
       {open && (
         <Modal
-          onClose={() => {
-            setOpen(false);
-            setCaseQuery("");
-          }}
+          onClose={() => setOpen(false)}
           size="lg"
           title="Nuevo test run"
         >
@@ -390,57 +358,12 @@ export default function RunsList({
                 <Label className="mb-2">
                   Selecciona los casos a incluir ({selected.size})
                 </Label>
-                <SearchInput
-                  value={caseQuery}
-                  onChange={setCaseQuery}
-                  placeholder="Buscar por código, nombre o suite…"
-                  aria-label="Buscar casos para el run"
-                  className="mb-2"
+                <CasePicker
+                  suites={suites}
+                  casesBySuite={casesBySuite}
+                  selected={selected}
+                  onChange={setSelected}
                 />
-                {caseQuery.trim() && (
-                  <p className="mb-2 text-xs text-slate-500">
-                    La casilla de cada suite marca solo los casos que se ven con esta búsqueda.
-                  </p>
-                )}
-                <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-[26rem] overflow-y-auto">
-                  {shownSuites.length === 0 && (
-                    <p className="py-4 text-center text-xs text-slate-400">
-                      Ningún caso coincide con “{caseQuery.trim()}”.
-                    </p>
-                  )}
-                  {shownSuites.map((s) => (
-                    <div key={s.id} className="p-2">
-                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={shownCases(s.id).every((c) => selected.has(c.id)) && shownCases(s.id).length > 0}
-                          onChange={() => toggleSuite(s.id)}
-                        />
-                        <Folder size={14} className="text-slate-400" aria-hidden />
-                        {s.name}
-                        <span className="text-xs font-normal text-slate-400 tabular-nums">
-                          ({shownCases(s.id).length})
-                        </span>
-                      </label>
-                      <div className="pl-6 mt-1 space-y-1">
-                        {shownCases(s.id).map((c) => (
-                          <label
-                            key={c.id}
-                            className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selected.has(c.id)}
-                              onChange={() => toggleCase(c.id)}
-                            />
-                            <CodeBadge code={c.code} />
-                            {c.title}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button

@@ -1,15 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import CasePicker from "./CasePicker";
 import ConfirmModal from "./ConfirmModal";
 import ReportDefectModal from "./ReportDefectModal";
 import { stripAnsi } from "@/lib/ansi";
+import type { CaseRef } from "@/lib/project-cases";
 import {
   AutomatedBadge,
   Badge,
   Button,
   CodeBadge,
   EmptyState,
+  Modal,
   StatusBadge,
   STATUS_META,
   Textarea,
@@ -29,6 +32,7 @@ import {
   Loader2,
   ListChecks,
   Play,
+  Plus,
   X,
 } from "lucide-react";
 
@@ -96,9 +100,14 @@ const STATUS_FILL: Record<RunStatus, string> = {
 export default function RunExecution({
   projectId,
   runId,
+  suites,
+  casesBySuite,
 }: {
   projectId: string;
   runId: string;
+  // The project's cases, to add ones that were left out of the run.
+  suites: { id: string; name: string }[];
+  casesBySuite: Record<string, CaseRef[]>;
 }) {
   const [run, setRun] = useState<{
     id: string;
@@ -124,6 +133,9 @@ export default function RunExecution({
     caseTitle: string;
   } | null>(null);
   const [reportingDefect, setReportingDefect] = useState(false);
+  const [addingCases, setAddingCases] = useState(false);
+  const [casesToAdd, setCasesToAdd] = useState<Set<string>>(new Set());
+  const [savingCases, setSavingCases] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -359,6 +371,29 @@ export default function RunExecution({
     }
   }
 
+  async function addCases() {
+    setSavingCases(true);
+    try {
+      const res = await fetch(`/api/runs/${runId}/cases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseIds: Array.from(casesToAdd) }),
+      });
+      if (!res.ok) {
+        toast.error(await errorMessage(res, "No se pudieron agregar los casos"));
+        return;
+      }
+      const { added } = await res.json();
+      const data = await fetch(`/api/runs/${runId}`).then((r) => (r.ok ? r.json() : null));
+      if (data) setRunCases(data.runCases);
+      setAddingCases(false);
+      setCasesToAdd(new Set());
+      toast.success(`${added} caso${added === 1 ? "" : "s"} agregado${added === 1 ? "" : "s"} al run`);
+    } finally {
+      setSavingCases(false);
+    }
+  }
+
   if (loading)
     return (
       <p className="flex items-center gap-2 text-sm text-slate-400">
@@ -375,18 +410,31 @@ export default function RunExecution({
     {} as Record<string, number>
   );
   const total = runCases.length;
+  // Cases of the project that aren't in the run yet.
+  const inRun = new Set(runCases.map((c) => c.caseId));
+  const addableCases = Object.fromEntries(
+    Object.entries(casesBySuite).map(([suiteId, cases]) => [
+      suiteId,
+      cases.filter((c) => !inRun.has(c.id)),
+    ])
+  );
 
   return (
     <div>
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 mb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold tracking-tight text-slate-900">{run?.name}</h2>
-          <span className="text-sm text-slate-500">
-            <span className="font-semibold text-slate-900 tabular-nums">
-              {total - (stats.untested || 0)}
-            </span>{" "}
-            de <span className="tabular-nums">{total}</span> ejecutados
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-slate-500">
+              <span className="font-semibold text-slate-900 tabular-nums">
+                {total - (stats.untested || 0)}
+              </span>{" "}
+              de <span className="tabular-nums">{total}</span> ejecutados
+            </span>
+            <Button variant="secondary" size="sm" icon={Plus} onClick={() => setAddingCases(true)}>
+              Agregar casos
+            </Button>
+          </div>
         </div>
         {(run?.branch || run?.commitSha || run?.ciUrl) && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-500">
@@ -683,6 +731,45 @@ export default function RunExecution({
         }
         onCancel={() => setPendingDeleteAttachment(null)}
       />
+
+      {addingCases && (
+        <Modal
+          onClose={() => {
+            setAddingCases(false);
+            setCasesToAdd(new Set());
+          }}
+          size="lg"
+          title="Agregar casos al run"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">
+              Solo se muestran los casos que todavía no están en este run ({casesToAdd.size}{" "}
+              seleccionado{casesToAdd.size === 1 ? "" : "s"}).
+            </p>
+            <CasePicker
+              suites={suites}
+              casesBySuite={addableCases}
+              selected={casesToAdd}
+              onChange={setCasesToAdd}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  setAddingCases(false);
+                  setCasesToAdd(new Set());
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button disabled={casesToAdd.size === 0} loading={savingCases} onClick={addCases}>
+                Agregar al run
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <ReportDefectModal
         open={pendingDefect !== null}
