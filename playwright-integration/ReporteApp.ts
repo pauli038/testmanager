@@ -1,5 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
-import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/test/reporter';
 
 /**
@@ -15,9 +14,8 @@ import type { FullResult, Reporter, TestCase, TestResult } from '@playwright/tes
  *   - el enlace al build de CI, la rama y el commit (detectados solos en GitHub
  *     Actions, GitLab CI, Azure DevOps, Jenkins y Bitbucket, o desde
  *     REPORT_CI_URL / REPORT_CI_BRANCH / REPORT_CI_COMMIT);
- *   - la captura, el video y el trace de los tests que fallan (los que guarda
- *     playwright.config.ts con 'only-on-failure' / 'retain-on-failure').
- *     Archivos de más de REPORT_MAX_ADJUNTO_MB (50 por defecto) no se suben.
+ *   - la captura de los tests que fallan (la que guarda playwright.config.ts
+ *     con screenshot: 'only-on-failure').
  */
 interface ResultadoCaso {
   caso: string | null; // TC-RFxxx-yy
@@ -32,7 +30,6 @@ interface ResultadoCaso {
   error?: string;
   anotaciones: { tipo: string; descripcion?: string }[];
   capturaRuta?: string; // archivo .png de la captura (solo si falló)
-  adjuntos: { ruta: string; nombre: string; tipo: string }[]; // video y trace
 }
 
 // Test Manager (/api/ingest) solo entiende estos tres estados.
@@ -88,8 +85,6 @@ function detectarCi(env: NodeJS.ProcessEnv = process.env): { url?: string; branc
 //   "ruta"   → "Describe > Sub-describe > título"          (Control Inventarios SAP)
 const ID_SIN_ETIQUETA: "titulo" | "ruta" = "titulo";
 
-const TAMANO_PARTE = 2 * 1024 * 1024; // Test Manager recibe los archivos en partes de 2MB
-
 export default class ReporteApp implements Reporter {
   // Por test.id: con retries, Playwright llama a onTestEnd una vez por intento y
   // aquí solo queda el último (el que decide si el test pasó o falló).
@@ -118,12 +113,6 @@ export default class ReporteApp implements Reporter {
 
     // Evidencia solo de los fallos reales: un 'fallo-esperado' es un defecto ya conocido.
     const captura = result.attachments.find((a) => a.name === 'screenshot' && a.contentType === 'image/png');
-    const adjuntos =
-      estado === 'fallido'
-        ? result.attachments
-            .filter((a) => a.path && (a.name === 'video' || a.name === 'trace'))
-            .map((a) => ({ ruta: a.path!, nombre: `${a.name}-${path.basename(a.path!)}`, tipo: a.contentType }))
-        : [];
 
     this.resultados.set(test.id, {
       caso,
@@ -138,7 +127,6 @@ export default class ReporteApp implements Reporter {
       error: result.error?.message?.slice(0, 4000),
       anotaciones: test.annotations.map((a) => ({ tipo: a.type, descripcion: a.description })),
       capturaRuta: estado === 'fallido' && captura?.path ? captura.path : undefined,
-      adjuntos,
     });
   }
 
@@ -194,7 +182,7 @@ export default class ReporteApp implements Reporter {
         omitidos: resultados.filter((r) => r.estado === 'omitido').length,
         conReintentos: resultados.filter((r) => r.intentos > 1).length,
       },
-      resultados: resultados.map(({ capturaRuta: _c, adjuntos: _a, ...r }) => r),
+      resultados: resultados.map(({ capturaRuta: _c, ...r }) => r),
     };
     void cuerpoDetallado; // referencia para no romper el build si luego lo usas
 
@@ -208,61 +196,11 @@ export default class ReporteApp implements Reporter {
         console.log(`[ReporteApp] Error al enviar (${res.status}): ${await res.text()}`);
         return;
       }
-      const data: { results: { runCaseId: string }[]; warnings?: string[] } = await res.json();
+      const data: { warnings?: string[] } = await res.json();
       console.log(`[ReporteApp] ✅ Resultados enviados (${res.status}) — ${cuerpoTestManager.results.length} casos.`);
       for (const aviso of data.warnings ?? []) console.log(`[ReporteApp] ⚠️  ${aviso}`);
-
-      await this.subirAdjuntos(url, token, resultados, data.results);
     } catch (e) {
       console.log(`[ReporteApp] No se pudo enviar: ${(e as Error).message}`);
     }
-  }
-
-  // Sube el video y el trace de cada test fallido al resultado que creó Test Manager
-  // (las respuestas vienen en el mismo orden que los resultados enviados).
-  private async subirAdjuntos(
-    url: string,
-    token: string,
-    resultados: ResultadoCaso[],
-    creados: { runCaseId: string }[]
-  ): Promise<void> {
-    const pendientes = resultados.flatMap((r, i) => r.adjuntos.map((a) => ({ ...a, runCaseId: creados[i]?.runCaseId })));
-    if (pendientes.length === 0) return;
-
-    const urlAdjuntos = url.replace(/\/?$/, '/attachments');
-    const maximo = Number(process.env.REPORT_MAX_ADJUNTO_MB || 50) * 1024 * 1024;
-    let subidos = 0;
-    let omitidos = 0;
-
-    for (const a of pendientes) {
-      try {
-        if (!a.runCaseId || (await stat(a.ruta)).size > maximo) {
-          omitidos++;
-          continue;
-        }
-        const datos = await readFile(a.ruta);
-        const partes = Math.max(1, Math.ceil(datos.length / TAMANO_PARTE));
-        const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        for (let i = 0; i < partes; i++) {
-          const form = new FormData();
-          form.append('runCaseId', a.runCaseId);
-          form.append('uploadId', uploadId);
-          form.append('chunkIndex', String(i));
-          form.append('totalChunks', String(partes));
-          form.append('filename', a.nombre);
-          form.append('mimeType', a.tipo);
-          form.append('chunk', new Blob([datos.subarray(i * TAMANO_PARTE, (i + 1) * TAMANO_PARTE)]));
-          const res = await fetch(urlAdjuntos, { method: 'POST', headers: { 'x-api-key': token }, body: form });
-          if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-        }
-        subidos++;
-      } catch (e) {
-        omitidos++;
-        console.log(`[ReporteApp] No se pudo subir ${a.nombre}: ${(e as Error).message}`);
-      }
-    }
-    console.log(
-      `[ReporteApp] 📎 ${subidos} video(s)/trace(s) subidos` + (omitidos ? `, ${omitidos} omitidos` : '')
-    );
   }
 }

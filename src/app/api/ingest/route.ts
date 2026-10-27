@@ -59,8 +59,7 @@ const cleanText = (v: unknown, max: number) =>
 // Response: { runId, results: [{ automationId, status, runCaseId }], warnings }
 // with results in the same order as the request (variants grouped on one case
 // share their runCaseId). "warnings" flags things that look off, e.g. results
-// that seem to belong to another project (wrong API key). Videos and traces
-// are uploaded afterwards to /api/ingest/attachments with the runCaseId.
+// that seem to belong to another project (wrong API key).
 export async function POST(req: NextRequest) {
   const { projectId, error } = await requireApiKey(req);
   if (error) return error;
