@@ -19,9 +19,6 @@
  *          }],
  *        ],
  *        use: {
- *          // Para que los fallos lleguen con video y trace al Test Manager:
- *          video: 'retain-on-failure',
- *          trace: 'retain-on-failure',
  *          screenshot: 'only-on-failure',
  *        },
  *      } satisfies PlaywrightTestConfig;
@@ -34,10 +31,6 @@
  *    (o pásalas directo en la config, como en el ejemplo).
  *
  * OPCIONES
- *   uploadVideos      (true)  sube el video de los tests que fallan
- *   uploadTraces      (true)  sube el trace (.zip) de los tests que fallan;
- *                             se abre en https://trace.playwright.dev
- *   maxAttachmentMB   (50)    archivos más grandes no se suben
  *   ci                (auto)  { url, branch, commit } del build de CI. Si no lo
  *                             pasas, se detecta en GitHub Actions, GitLab CI,
  *                             Azure DevOps, Jenkins y Bitbucket, o se lee de
@@ -62,8 +55,6 @@
  * test parametrizado) se guardan como un solo resultado: el peor, con el error
  * de cada variante.
  */
-import { readFile, stat } from "node:fs/promises";
-import path from "node:path";
 import type {
   FullConfig,
   FullResult,
@@ -79,9 +70,6 @@ type ReporterOptions = {
   url: string;
   apiKey: string;
   runName?: string;
-  uploadVideos?: boolean;
-  uploadTraces?: boolean;
-  maxAttachmentMB?: number;
   ci?: CiInfo;
 };
 
@@ -93,10 +81,6 @@ type IngestResult = {
   errorMessage?: string;
   screenshotBase64?: string;
 };
-
-type PendingFile = { path: string; name: string; contentType: string };
-
-const CHUNK_BYTES = 2 * 1024 * 1024; // same size the web app uses
 
 // Build info from the usual CI environment variables.
 function detectCi(env: NodeJS.ProcessEnv = process.env): CiInfo {
@@ -149,8 +133,6 @@ function detectCi(env: NodeJS.ProcessEnv = process.env): CiInfo {
 class TestManagerReporter implements Reporter {
   private options: ReporterOptions;
   private results: IngestResult[] = [];
-  // Files to upload for each result, by its position in `results`.
-  private files = new Map<number, PendingFile[]>();
 
   constructor(options: ReporterOptions) {
     if (!options?.url || !options?.apiKey) {
@@ -180,34 +162,14 @@ class TestManagerReporter implements Reporter {
       (a) => a.contentType === "image/png" && a.body
     );
 
-    const index = this.results.push({
+    this.results.push({
       automationId,
       title: test.title,
       status,
       durationMs: result.duration,
       errorMessage: result.error?.message,
       screenshotBase64: screenshot?.body?.toString("base64"),
-    }) - 1;
-
-    // Videos and traces are files on disk; only failures are worth the space.
-    if (status === "failed") {
-      const wanted = result.attachments.filter(
-        (a) =>
-          a.path &&
-          ((a.name === "video" && this.options.uploadVideos !== false) ||
-            (a.name === "trace" && this.options.uploadTraces !== false))
-      );
-      if (wanted.length) {
-        this.files.set(
-          index,
-          wanted.map((a) => ({
-            path: a.path!,
-            name: `${a.name}-${path.basename(a.path!)}`,
-            contentType: a.contentType,
-          }))
-        );
-      }
-    }
+    });
   }
 
   async onEnd(_result: FullResult) {
@@ -233,71 +195,13 @@ class TestManagerReporter implements Reporter {
         );
         return;
       }
-      const data: {
-        runId: string;
-        results: { runCaseId: string }[];
-        warnings?: string[];
-      } = await res.json();
+      const data: { runId: string; warnings?: string[] } = await res.json();
       console.log(
         `[testmanager-reporter] ✅ ${this.results.length} resultados enviados. Run: ${data.runId}`
       );
       for (const w of data.warnings ?? []) console.warn(`[testmanager-reporter] ⚠️  ${w}`);
-
-      await this.uploadFiles(data.results);
     } catch (err) {
       console.error("[testmanager-reporter] No se pudo conectar con Test Manager:", err);
-    }
-  }
-
-  private async uploadFiles(created: { runCaseId: string }[]) {
-    if (this.files.size === 0) return;
-    const attachmentsUrl = this.options.url.replace(/\/?$/, "/attachments");
-    const maxBytes = (this.options.maxAttachmentMB ?? 50) * 1024 * 1024;
-    let uploaded = 0;
-    let skipped = 0;
-
-    for (const [index, files] of this.files) {
-      const runCaseId = created[index]?.runCaseId;
-      if (!runCaseId) continue;
-      for (const file of files) {
-        try {
-          const size = (await stat(file.path)).size;
-          if (size > maxBytes) {
-            skipped++;
-            continue;
-          }
-          await this.uploadInChunks(attachmentsUrl, runCaseId, file, await readFile(file.path));
-          uploaded++;
-        } catch (err) {
-          skipped++;
-          console.warn(`[testmanager-reporter] No se pudo subir ${file.name}:`, err);
-        }
-      }
-    }
-    console.log(
-      `[testmanager-reporter] 📎 ${uploaded} video(s)/trace(s) subidos` +
-        (skipped ? `, ${skipped} omitidos (muy grandes o con error)` : "")
-    );
-  }
-
-  private async uploadInChunks(url: string, runCaseId: string, file: PendingFile, data: Buffer) {
-    const totalChunks = Math.max(1, Math.ceil(data.length / CHUNK_BYTES));
-    const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    for (let i = 0; i < totalChunks; i++) {
-      const form = new FormData();
-      form.append("runCaseId", runCaseId);
-      form.append("uploadId", uploadId);
-      form.append("chunkIndex", String(i));
-      form.append("totalChunks", String(totalChunks));
-      form.append("filename", file.name);
-      form.append("mimeType", file.contentType);
-      form.append("chunk", new Blob([data.subarray(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES)]));
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "x-api-key": this.options.apiKey },
-        body: form,
-      });
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
     }
   }
 }
