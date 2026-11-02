@@ -18,119 +18,69 @@
  * archivo que falla se queda como estaba y se informa al final.
  * --limit=N procesa solo N archivos (para probar primero con pocos).
  *
+ * Lo mismo se puede hacer sin instalar nada desde la app: página Usuarios >
+ * "Evidencias en Supabase Storage" (solo admin).
+ *
  * Uso (necesita DATABASE_URL, SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY):
  *   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts
  *   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts --apply
  *   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts --clear-db
  */
-import { createHash } from "node:crypto";
-import { db } from "../src/db";
-import { attachments } from "../src/db/schema";
-import { and, asc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
-import { downloadObject, storageEnabled, uploadObject } from "../src/lib/storage";
+import { storageEnabled } from "../src/lib/storage";
+import {
+  migrateOne,
+  migrationSummary,
+  pendingIds,
+  type MigrationStep,
+} from "../src/lib/attachment-migration";
 
 const APPLY = process.argv.includes("--apply");
 const CLEAR_DB = process.argv.includes("--clear-db");
 const LIMIT = Number(process.argv.find((a) => a.startsWith("--limit="))?.split("=")[1]) || Infinity;
 
-const sha256 = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 async function summary() {
-  const [row] = await db
-    .select({
-      total: sql<number>`count(*)`,
-      dbOnly: sql<number>`count(*) filter (where ${attachments.storagePath} is null)`,
-      both: sql<number>`count(*) filter (where ${attachments.storagePath} is not null and ${attachments.data} is not null)`,
-      bucketOnly: sql<number>`count(*) filter (where ${attachments.storagePath} is not null and ${attachments.data} is null)`,
-      dbBytes: sql<number>`coalesce(sum(length(${attachments.data})), 0) * 3 / 4`,
-    })
-    .from(attachments);
+  const row = await migrationSummary();
   console.log(`Evidencias: ${row.total}`);
   console.log(`  solo en la base de datos:            ${row.dbOnly}`);
   console.log(`  en el bucket y aún en la base:       ${row.both}`);
   console.log(`  solo en el bucket (terminadas):      ${row.bucketOnly}`);
-  console.log(`  espacio que ocupan en la base:       ~${mb(Number(row.dbBytes))}`);
+  console.log(`  espacio que ocupan en la base:       ~${mb(row.dbBytes)}`);
 }
 
-// Walks the rows that match `where` one at a time (only ids are listed, so a
-// big table never has to fit in memory).
-async function forEachRow(where: ReturnType<typeof and>, work: (id: string) => Promise<void>) {
+// Walks the pending rows one at a time (only ids are listed, so a big table
+// never has to fit in memory).
+async function run(step: MigrationStep) {
   let after = "";
   let done = 0;
+  let ok = 0;
+  const failed: string[] = [];
   while (done < LIMIT) {
-    const ids = await db
-      .select({ id: attachments.id })
-      .from(attachments)
-      .where(and(where, gt(attachments.id, after)))
-      .orderBy(asc(attachments.id))
-      .limit(50);
+    const ids = await pendingIds(step, after, 50);
     if (ids.length === 0) break;
-    for (const { id } of ids) {
+    for (const id of ids) {
       if (done >= LIMIT) break;
-      await work(id);
-      done++;
       after = id;
+      done++;
+      const r = await migrateOne(step, id);
+      if (!r) continue;
+      if (r.ok) {
+        ok++;
+        console.log(`✔ ${r.filename}${r.message ? ` (${r.message})` : ""}`);
+      } else {
+        failed.push(`${r.id} ${r.filename}: ${r.message}`);
+        console.error(`✘ ${r.filename}: ${r.message}`);
+      }
     }
   }
-}
-
-async function copyToBucket() {
-  let copied = 0;
-  const failed: string[] = [];
-  await forEachRow(and(isNull(attachments.storagePath), isNotNull(attachments.data)), async (id) => {
-    const row = await db.query.attachments.findFirst({ where: eq(attachments.id, id) });
-    if (!row?.data || row.storagePath) return;
-    const original = Buffer.from(row.data, "base64");
-    try {
-      await uploadObject(id, original, row.mimeType);
-      const copy = await downloadObject(id);
-      if (sha256(copy) !== sha256(original)) throw new Error("la copia del bucket no coincide");
-      await db
-        .update(attachments)
-        .set({ storagePath: id })
-        .where(and(eq(attachments.id, id), isNull(attachments.storagePath)));
-      copied++;
-      console.log(`✔ ${row.filename} (${mb(original.length)})`);
-    } catch (err) {
-      failed.push(`${id} ${row.filename}: ${(err as Error).message}`);
-      console.error(`✘ ${row.filename}: ${(err as Error).message}`);
-    }
-  });
-  console.log(`\nCopiadas y verificadas: ${copied}. Con error (siguen en la base de datos): ${failed.length}`);
+  console.log(
+    step === "copy"
+      ? `\nCopiadas y verificadas: ${ok}. Con error (siguen en la base de datos): ${failed.length}`
+      : `\nCopias borradas de la base de datos: ${ok}. Conservadas por error: ${failed.length}`
+  );
   for (const f of failed) console.log(`  - ${f}`);
-}
-
-async function clearDbCopies() {
-  let cleared = 0;
-  const failed: string[] = [];
-  await forEachRow(and(isNotNull(attachments.storagePath), isNotNull(attachments.data)), async (id) => {
-    const row = await db.query.attachments.findFirst({ where: eq(attachments.id, id) });
-    if (!row?.data || !row.storagePath) return;
-    const original = Buffer.from(row.data, "base64");
-    try {
-      if (sha256(await downloadObject(row.storagePath)) !== sha256(original)) {
-        // The bucket copy changed since --apply: upload it again from the database.
-        await uploadObject(row.storagePath, original, row.mimeType);
-        if (sha256(await downloadObject(row.storagePath)) !== sha256(original)) {
-          await db.update(attachments).set({ storagePath: null }).where(eq(attachments.id, id));
-          throw new Error(
-            "el archivo del bucket no coincide con el de la base de datos; se sigue sirviendo desde la base"
-          );
-        }
-        console.log(`  ↻ ${row.filename}: la copia del bucket no coincidía, se volvió a subir`);
-      }
-      await db.update(attachments).set({ data: null }).where(eq(attachments.id, id));
-      cleared++;
-      console.log(`✔ ${row.filename}`);
-    } catch (err) {
-      failed.push(`${id} ${row.filename}: ${(err as Error).message}`);
-      console.error(`✘ ${row.filename}: ${(err as Error).message}`);
-    }
-  });
-  console.log(`\nCopias borradas de la base de datos: ${cleared}. Conservadas por error: ${failed.length}`);
-  for (const f of failed) console.log(`  - ${f}`);
-  if (cleared) {
+  if (step === "clear" && ok) {
     console.log(
       "\nPara que Supabase muestre el espacio liberado, corre en su SQL Editor: VACUUM FULL attachments;"
     );
@@ -144,10 +94,10 @@ async function main() {
   await summary();
   if (APPLY) {
     console.log("\nCopiando al bucket…");
-    await copyToBucket();
+    await run("copy");
   } else if (CLEAR_DB) {
     console.log("\nBorrando de la base de datos las copias ya verificadas en el bucket…");
-    await clearDbCopies();
+    await run("clear");
   } else {
     console.log("\nSimulación: no se cambió nada. Usa --apply para copiar al bucket.");
     return;

@@ -71,23 +71,16 @@ Copia `.env.example` a `.env` y ajusta:
 Sin perder ninguna, en este orden:
 
 1. En Supabase, **Storage → New bucket**: nombre `attachments`, **sin** marcar "Public bucket".
-2. Agrega `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en Vercel (y en tu `.env` local) y vuelve a desplegar. Desde ahí las evidencias nuevas van al bucket; las viejas se siguen viendo desde la base de datos.
-3. Mira cuántas hay (no cambia nada):
-   ```bash
-   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts
-   ```
-4. Cópialas al bucket. Cada archivo se sube, se vuelve a descargar y se compara (SHA-256) antes de marcarlo como migrado; **no se borra nada** de la base de datos. Puedes probar primero con unas pocas (`--limit=5`) y repetirlo si algo falla:
-   ```bash
-   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts --apply
-   ```
-5. Revisa en la app que las evidencias de runs y defectos se ven bien.
-6. Libera la base de datos. Compara otra vez cada archivo del bucket con su copia antes de borrarla; si alguno no coincide lo conserva:
-   ```bash
-   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts --clear-db
-   ```
-7. En el *SQL Editor* de Supabase corre `VACUUM FULL attachments;` para que se note el espacio liberado.
+2. Agrega `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en Vercel y vuelve a desplegar. Desde ahí las evidencias nuevas van al bucket; las viejas se siguen viendo desde la base de datos.
+3. Entra a la app como admin y ve a **Usuarios → Evidencias en Supabase Storage**:
+   - **1. Copiar al bucket**: cada archivo se sube, se vuelve a descargar y se compara (SHA-256) antes de marcarlo como migrado; **no se borra nada** de la base de datos. Si se corta, vuelve a pulsarlo: retoma donde quedó.
+   - Revisa que las evidencias de runs y defectos se ven bien.
+   - **2. Liberar la base de datos**: compara otra vez cada archivo del bucket con su copia antes de borrarla; si alguno no coincide lo conserva.
 
-> El plan gratis de Supabase no acepta archivos de más de 50MB en Storage: si algún video es más grande, el script lo deja en la base de datos y lo informa.
+   (También se puede hacer desde una terminal con `npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts`, con `--apply` y luego `--clear-db`.)
+4. En el *SQL Editor* de Supabase corre `VACUUM FULL attachments;` para que se note el espacio liberado.
+
+> El plan gratis de Supabase no acepta archivos de más de 50MB en Storage: si algún video es más grande, se queda en la base de datos y se informa como error.
 
 ## Desplegar "en la nube" (accesible desde cualquier lado)
 

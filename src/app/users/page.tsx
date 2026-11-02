@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { asc } from "drizzle-orm";
 import UsersManager from "@/components/UsersManager";
+import AttachmentMigration from "@/components/AttachmentMigration";
 import { PageHeader } from "@/components/ui";
 
 export default async function UsersPage() {
@@ -26,6 +27,7 @@ export default async function UsersPage() {
         currentUserId={session.user.id}
         isAdmin={session.user.role === "admin"}
       />
+      {session.user.role === "admin" && <AttachmentMigration />}
     </div>
   );
 }
