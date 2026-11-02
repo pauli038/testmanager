@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { projects, testSuites, testCases, testRuns, testPlans, testRunCases, defects } from "@/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getDashboardData } from "./dashboard-data";
+import { readAttachment } from "./attachments";
 import type { StatusCounts } from "@/components/DashboardCharts";
 import type { ReportChart } from "./report-charts";
 import { STATUS_COLORS, BLUE, ORANGE, PURPLE } from "./dashboard-colors";
@@ -225,7 +226,7 @@ export async function getDefectsReportData(
 
   const attachmentsWith = {
     testCases: { with: { case: { columns: { title: true } } } },
-    attachments: { columns: { filename: true, mimeType: true, data: true } },
+    attachments: { columns: { filename: true, mimeType: true, data: true, storagePath: true } },
   } as const;
 
   const rows = defectIds.length
@@ -249,7 +250,7 @@ export async function getDefectsReportData(
         with: attachmentsWith,
       });
 
-  const sections = rows.map((d) => {
+  const sections = await Promise.all(rows.map(async (d) => {
     const rawSteps: Array<string | { step: string }> = d.stepsToReproduce
       ? JSON.parse(d.stepsToReproduce)
       : [];
@@ -258,9 +259,15 @@ export async function getDefectsReportData(
       ? JSON.parse(d.retests)
       : [];
     const caseTitles = d.testCases.map((tc) => tc.case.title);
-    const images = d.attachments
-      .filter((a) => a.mimeType === "image/png" || a.mimeType === "image/jpeg" || a.mimeType === "image/jpg")
-      .map((a) => ({ filename: a.filename, mimeType: a.mimeType, base64: a.data }));
+    const images = await Promise.all(
+      d.attachments
+        .filter((a) => a.mimeType === "image/png" || a.mimeType === "image/jpeg" || a.mimeType === "image/jpg")
+        .map(async (a) => ({
+          filename: a.filename,
+          mimeType: a.mimeType,
+          base64: (await readAttachment(a)).toString("base64"),
+        }))
+    );
     return {
       heading: d.title,
       images: images.length ? images : undefined,
@@ -291,7 +298,7 @@ export async function getDefectsReportData(
         },
       ],
     };
-  });
+  }));
 
   const safeName = project.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   const generated = `Generado: ${new Date().toLocaleString("es-ES")}`;

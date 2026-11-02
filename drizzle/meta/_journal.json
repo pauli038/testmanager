@@ -113,6 +113,13 @@
       "when": 1793142729417,
       "tag": "0015_delete_playwright_traces",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793631383125,
+      "tag": "0016_attachments_storage_path",
+      "breakpoints": true
     }
   ]
 }

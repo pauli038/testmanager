@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { attachments } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
+import { saveAttachment } from "@/lib/attachments";
 
-// Evidence is stored inline in the database (base64), so limits stay modest —
-// videos are capped at 200s client-side, which keeps them well under this size.
+// Limits stay modest — videos are capped at 200s client-side, which keeps them
+// well under this size.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200MB
 
@@ -28,18 +27,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const mimeType = file.type || "image/png";
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const base64 = buffer.toString("base64");
-
-    const [attachment] = await db
-      .insert(attachments)
-      .values({
-        runCaseId: id,
-        filename: file.name,
-        data: base64,
-        mimeType,
-      })
-      .returning();
+    const attachment = await saveAttachment({
+      runCaseId: id,
+      filename: file.name,
+      mimeType,
+      data: Buffer.from(await file.arrayBuffer()),
+    });
 
     return NextResponse.json(
       {
@@ -52,6 +45,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     );
   } catch (err) {
     console.error("Failed to save attachment:", err);
-    return NextResponse.json({ error: "No se pudo guardar el archivo en la base de datos" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo guardar el archivo" }, { status: 500 });
   }
 }

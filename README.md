@@ -24,7 +24,7 @@ Tu propio Test Manager (tipo TestRail/Qase), hecho a la medida y sin costo de li
 - **Tailwind CSS** para la interfaz
 - **Recharts** para las gráficas del dashboard
 
-> Las evidencias/screenshots se guardan directo en la base de datos (no en disco), así que la app entera no necesita ningún disco persistente — puede correr en cualquier hosting, incluyendo los serverless como Vercel.
+> Las evidencias/screenshots se guardan en un bucket privado de Supabase Storage (o, si no lo configuras, directo en la base de datos), nunca en disco, así que la app entera no necesita ningún disco persistente — puede correr en cualquier hosting, incluyendo los serverless como Vercel.
 
 ## Correr en local
 
@@ -62,6 +62,32 @@ Copia `.env.example` a `.env` y ajusta:
 | `AUTH_SECRET` | Clave para firmar las sesiones. Genera una con `openssl rand -base64 32` y **cámbiala en producción**. |
 | `DATABASE_URL` | Cadena de conexión de tu base de datos Postgres (Supabase). En servidores propios usa el *Session pooler* (5432); en Vercel/serverless el *Transaction pooler* (6543) — la app desactiva los prepared statements automáticamente en ese caso. |
 | `AUTH_TRUST_HOST` | Ponlo en `true` cuando despliegues en un dominio propio (fuera de `localhost`). No hace falta en Vercel, se detecta solo. |
+| `SUPABASE_URL` | URL de tu proyecto de Supabase (*Project Settings → API*, ej. `https://xxxx.supabase.co`). Junto con la siguiente, hace que las evidencias se guarden en Supabase Storage en vez de en la base de datos. |
+| `SUPABASE_SERVICE_ROLE_KEY` | La *service_role key* del proyecto (*Project Settings → API*). Es secreta: solo va en el servidor, nunca en el navegador. |
+| `SUPABASE_STORAGE_BUCKET` | Opcional. Nombre del bucket; por defecto `attachments`. |
+
+### Pasar las evidencias de la base de datos a Supabase Storage
+
+Sin perder ninguna, en este orden:
+
+1. En Supabase, **Storage → New bucket**: nombre `attachments`, **sin** marcar "Public bucket".
+2. Agrega `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` en Vercel (y en tu `.env` local) y vuelve a desplegar. Desde ahí las evidencias nuevas van al bucket; las viejas se siguen viendo desde la base de datos.
+3. Mira cuántas hay (no cambia nada):
+   ```bash
+   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts
+   ```
+4. Cópialas al bucket. Cada archivo se sube, se vuelve a descargar y se compara (SHA-256) antes de marcarlo como migrado; **no se borra nada** de la base de datos. Puedes probar primero con unas pocas (`--limit=5`) y repetirlo si algo falla:
+   ```bash
+   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts --apply
+   ```
+5. Revisa en la app que las evidencias de runs y defectos se ven bien.
+6. Libera la base de datos. Compara otra vez cada archivo del bucket con su copia antes de borrarla; si alguno no coincide lo conserva:
+   ```bash
+   npx tsx --env-file=.env scripts/migrate-attachments-to-storage.ts --clear-db
+   ```
+7. En el *SQL Editor* de Supabase corre `VACUUM FULL attachments;` para que se note el espacio liberado.
+
+> El plan gratis de Supabase no acepta archivos de más de 50MB en Storage: si algún video es más grande, el script lo deja en la base de datos y lo informa.
 
 ## Desplegar "en la nube" (accesible desde cualquier lado)
 
