@@ -389,7 +389,11 @@ export const attachments = pgTable("attachments", {
   // table. Null means "general defect evidence".
   retestId: text("retest_id"),
   filename: text("filename").notNull(),
-  data: text("data").notNull(), // base64-encoded file content
+  // Where the file lives: an object in the storage bucket (lib/storage.ts),
+  // or, for files saved before the bucket existed, base64 in `data`. A file
+  // being migrated has both until `data` is cleared.
+  storagePath: text("storage_path"),
+  data: text("data"), // base64-encoded file content
   mimeType: text("mime_type").notNull().default("image/png"),
   createdAt: createdAt(),
 });

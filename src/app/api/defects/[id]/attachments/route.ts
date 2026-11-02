@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { attachments } from "@/db/schema";
 import { requireUser } from "@/lib/require-auth";
+import { saveAttachment } from "@/lib/attachments";
 
-const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — evidence is stored inline in the database
+const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { error } = await requireUser();
@@ -24,19 +23,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const mimeType = file.type || "image/png";
 
   try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const base64 = buffer.toString("base64");
-
-    const [attachment] = await db
-      .insert(attachments)
-      .values({
-        defectId: id,
-        retestId,
-        filename: file.name,
-        data: base64,
-        mimeType,
-      })
-      .returning();
+    const attachment = await saveAttachment({
+      defectId: id,
+      retestId,
+      filename: file.name,
+      mimeType,
+      data: Buffer.from(await file.arrayBuffer()),
+    });
 
     return NextResponse.json(
       {
@@ -49,6 +42,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     );
   } catch (err) {
     console.error("Failed to save attachment:", err);
-    return NextResponse.json({ error: "No se pudo guardar el archivo en la base de datos" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo guardar el archivo" }, { status: 500 });
   }
 }

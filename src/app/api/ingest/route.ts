@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { db } from "@/db";
-import { testRuns, testRunCases, testSuites, testCases, attachments, projects } from "@/db/schema";
+import { testRuns, testRunCases, testSuites, testCases, projects } from "@/db/schema";
 import { eq, and, inArray, ne } from "drizzle-orm";
 import { extractCodes, caseCodes, mentionsCode, normalizeTitle } from "@/lib/case-matching";
 import { requireApiKey } from "@/lib/api-key";
 import { notifyRunFinished } from "@/lib/notifications";
+import { saveAttachment } from "@/lib/attachments";
 
 type Outcome = "passed" | "failed" | "skipped";
 type IngestResult = {
@@ -267,11 +268,11 @@ export async function POST(req: NextRequest) {
     for (const r of group) {
       if (!r.screenshotBase64) continue;
       try {
-        await db.insert(attachments).values({
+        await saveAttachment({
           runCaseId: runCase.id,
           filename: `${variantName(r).replace(/[^\w.-]+/g, "_").slice(0, 120)}.png`,
-          data: r.screenshotBase64,
           mimeType: "image/png",
+          data: Buffer.from(r.screenshotBase64, "base64"),
         });
       } catch {
         // ignore attachment errors, don't fail the whole ingest

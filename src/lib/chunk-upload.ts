@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { attachments, uploadChunks } from "@/db/schema";
+import { uploadChunks } from "@/db/schema";
+import { saveAttachment as storeAttachment } from "./attachments";
 import { asc, eq, sql } from "drizzle-orm";
 
 // Large files arrive in small parts: some reverse proxies / tunnels (e.g. VS
@@ -89,10 +90,7 @@ async function saveAttachment(
     );
   }
   try {
-    const [attachment] = await db
-      .insert(attachments)
-      .values({ runCaseId, filename, data: file.toString("base64"), mimeType })
-      .returning();
+    const attachment = await storeAttachment({ runCaseId, filename, mimeType, data: file });
 
     return NextResponse.json(
       {
@@ -105,6 +103,6 @@ async function saveAttachment(
     );
   } catch (err) {
     console.error("Failed to save chunked attachment:", err);
-    return NextResponse.json({ error: "No se pudo guardar el archivo en la base de datos" }, { status: 500 });
+    return NextResponse.json({ error: "No se pudo guardar el archivo" }, { status: 500 });
   }
 }
